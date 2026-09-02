@@ -26,6 +26,10 @@ sandboxes/
 .DS_Store
 Thumbs.db
 
+# Preserved history from the previous apps/web-only git repo (chatgpt-team.site remote)
+apps/web/.git-chatgpt-sites-backup/
+apps/web/tsconfig.tsbuildinfo
+
 # Logs
 *.log
 npm-debug.log*

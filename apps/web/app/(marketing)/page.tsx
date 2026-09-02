@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { ReproductionResult } from './lib/repro-engine';
+import type { ReproductionResult } from '../lib/repro-engine';
 
 const stages = [
   ['Codex', 'Extracted 8 facts and generated ReproSpec'],
