@@ -1,12 +1,22 @@
 import { ClerkProvider } from '@clerk/nextjs';
+import { dark } from '@clerk/themes';
 
 const clerkAppearance = {
+  baseTheme: dark,
   variables: {
     colorPrimary: '#c8ff5c',
     colorBackground: '#0d1924',
     colorInputBackground: '#071018',
+    // Both naming generations are set intentionally: this Clerk version's
+    // typed token names (colorForeground/colorMutedForeground) coexist with
+    // the older colorText/colorTextSecondary names some internals still
+    // read. Redundant, but harmless, and avoids depending on exactly which
+    // one a given component version resolves.
+    colorForeground: '#eef4ff',
+    colorMutedForeground: '#8d99aa',
     colorText: '#eef4ff',
     colorTextSecondary: '#8d99aa',
+    colorInputForeground: '#eef4ff',
     colorDanger: '#ff846e',
     borderRadius: '10px',
     fontFamily: 'var(--font-geist-sans), Arial, sans-serif',

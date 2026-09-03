@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.8.2",
+    "@clerk/themes": "^2.4.57",
     "@neondatabase/serverless": "^1.1.0",
     "drizzle-orm": "^0.45.2",
     "next": "16.2.6",
