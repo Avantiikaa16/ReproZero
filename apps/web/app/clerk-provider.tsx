@@ -22,7 +22,16 @@ const clerkAppearance = {
     fontFamily: 'var(--font-geist-sans), Arial, sans-serif',
   },
   elements: {
-    card: { border: '1px solid rgba(207,224,243,.13)', boxShadow: 'none' },
+    // Matches .productFrame in globals.css: the rest of the product
+    // separates panels from the page background mainly via this soft drop
+    // shadow, not the (intentionally subtle) border alone — omitting it
+    // made the auth card blend straight into the page background.
+    card: {
+      background: 'rgba(10,22,32,.92)',
+      border: '1px solid rgba(207,224,243,.13)',
+      borderRadius: '21px',
+      boxShadow: '0 35px 110px rgba(0,0,0,.36)',
+    },
     footerActionLink: { color: '#63d9ff' },
   },
 };
