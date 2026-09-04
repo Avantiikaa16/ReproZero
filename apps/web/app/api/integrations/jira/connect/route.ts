@@ -17,6 +17,9 @@ export async function GET() {
     );
     return response;
   } catch (error) {
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to start Jira connection.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Jira connect failed:', error);
+    return Response.json({ error: 'Failed to start Jira connection.' }, { status: 500 });
   }
 }
