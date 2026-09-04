@@ -48,7 +48,11 @@ const clerkAppearance = {
     socialButtonsBlockButton: {
       background: 'rgba(255,255,255,.035)',
       border: '1px solid rgba(207,224,243,.16)',
+      color: '#eef4ff',
     },
+    // The label is sometimes a separate element from the button itself;
+    // set both so the text color takes regardless of which one applies.
+    socialButtonsBlockButtonText: { color: '#eef4ff' },
   },
 };
 
