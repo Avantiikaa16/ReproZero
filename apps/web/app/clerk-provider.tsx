@@ -17,6 +17,9 @@ const clerkAppearance = {
     colorText: '#eef4ff',
     colorTextSecondary: '#8d99aa',
     colorInputForeground: '#eef4ff',
+    // Matches .primaryButton in globals.css: acid-green buttons always pair
+    // with dark near-black text there, never white.
+    colorPrimaryForeground: '#0a120d',
     colorDanger: '#ff846e',
     borderRadius: '10px',
     fontFamily: 'var(--font-geist-sans), Arial, sans-serif',
@@ -37,6 +40,15 @@ const clerkAppearance = {
       boxShadow: '0 35px 110px rgba(0,0,0,.36)',
     },
     footerActionLink: { color: '#63d9ff' },
+    // Belt-and-suspenders with colorPrimaryForeground above, in case this
+    // Clerk version resolves one but not the other.
+    formButtonPrimary: { color: '#0a120d' },
+    // Matches .navCta in globals.css: a visible bordered pill instead of
+    // blending into the card background with no surface of its own.
+    socialButtonsBlockButton: {
+      background: 'rgba(255,255,255,.035)',
+      border: '1px solid rgba(207,224,243,.16)',
+    },
   },
 };
 
