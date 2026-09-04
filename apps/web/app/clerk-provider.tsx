@@ -5,7 +5,7 @@ const clerkAppearance = {
   baseTheme: dark,
   variables: {
     colorPrimary: '#c8ff5c',
-    colorBackground: '#0d1924',
+    colorBackground: '#182635',
     colorInputBackground: '#071018',
     // Both naming generations are set intentionally: this Clerk version's
     // typed token names (colorForeground/colorMutedForeground) coexist with
@@ -27,8 +27,12 @@ const clerkAppearance = {
     // shadow, not the (intentionally subtle) border alone — omitting it
     // made the auth card blend straight into the page background.
     card: {
-      background: 'rgba(10,22,32,.92)',
-      border: '1px solid rgba(207,224,243,.13)',
+      // Solid and deliberately a step lighter than --night/--panel (not a
+      // near-black translucent copy of .productFrame) so the card reads as
+      // a distinct surface against the page background, not just a shadow
+      // outline around the same darkness.
+      background: '#182635',
+      border: '1px solid rgba(207,224,243,.16)',
       borderRadius: '21px',
       boxShadow: '0 35px 110px rgba(0,0,0,.36)',
     },
