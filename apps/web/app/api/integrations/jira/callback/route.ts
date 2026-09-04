@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { NextResponse } from 'next/server';
 import { db } from '../../../../../db/client';
 import { integrationConnections, integrationCredentials } from '../../../../../db/schema';
 import { recordAuditEvent } from '../../../../lib/audit';
@@ -6,9 +7,12 @@ import { authErrorResponse, requireWorkspaceContext } from '../../../../lib/auth
 import { exchangeJiraCode, getJiraAccessibleResources } from '../../../../lib/jira-adapter';
 import { encryptSecret } from '../../../../lib/secret-crypto';
 
-function redirectToIntegrations(request: Request, query: string): Response {
+// NextResponse.redirect(), not Response.redirect() — the latter's headers
+// are immutable per the Fetch spec, which broke clearing the nonce cookie
+// below the same way it broke setting it in connect/route.ts.
+function redirectToIntegrations(request: Request, query: string): NextResponse {
   const url = new URL(`/integrations?${query}`, request.url);
-  return Response.redirect(url, 302);
+  return NextResponse.redirect(url);
 }
 
 export async function GET(request: Request) {
@@ -109,7 +113,7 @@ export async function GET(request: Request) {
     });
 
     const response = redirectToIntegrations(request, 'connected=jira');
-    response.headers.append('Set-Cookie', 'jira_oauth_nonce=; Path=/; HttpOnly; Max-Age=0');
+    response.cookies.set('jira_oauth_nonce', '', { httpOnly: true, maxAge: 0, path: '/' });
     return response;
   } catch (error) {
     const authError = authErrorResponse(error);
