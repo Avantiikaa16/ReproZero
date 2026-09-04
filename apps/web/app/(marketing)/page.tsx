@@ -2,7 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 import type { ReproductionResult } from '../lib/repro-engine';
+
+// Mirrors the layout's guard: only mount this (and therefore only call
+// useAuth) when a ClerkProvider is actually present above this page — see
+// (marketing)/layout.tsx. <SignedIn>/<SignedOut> aren't available in this
+// Clerk version ("Core 3"), so this checks the hook directly instead.
+const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+function AuthAwareNavLinks() {
+  const { isSignedIn } = useAuth();
+  if (isSignedIn) {
+    return <Link className="navCta" href="/overview">Go to workspace</Link>;
+  }
+  return <>
+    <Link href="/sign-in">Sign in</Link>
+    <Link className="navCta" href="/sign-up">Sign up</Link>
+  </>;
+}
 
 const stages = [
   ['Codex', 'Extracted 8 facts and generated ReproSpec'],
@@ -177,7 +195,7 @@ export default function Home() {
   };
 
   return <main>
-    <nav className="nav shell"><a className="brand" href="#top"><span className="brandMark">R0</span><span>ReproZero</span></a><div className="navLinks"><a href="#workflow">How it works</a><a href="#integrations">Integrations</a><a href="#intake">Try the demo</a><Link href="/sign-in">Sign in</Link><Link className="navCta" href="/sign-up">Sign up</Link></div></nav>
+    <nav className="nav shell"><a className="brand" href="#top"><span className="brandMark">R0</span><span>ReproZero</span></a><div className="navLinks"><a href="#workflow">How it works</a><a href="#integrations">Integrations</a><a href="#intake">Try the demo</a>{clerkConfigured ? <AuthAwareNavLinks /> : <><Link href="/sign-in">Sign in</Link><Link className="navCta" href="/sign-up">Sign up</Link></>}</div></nav>
 
     <section className="hero shell" id="top">
       <div className="heroCopy"><div className="eyebrow"><span /> Built for production incidents</div><h1>Turn the ticket into a <em>running failure.</em></h1><p className="heroLead">ReproZero compiles tickets, logs, and repository context into a minimal executable reproduction - then proves the repair against the exact same failure.</p><div className="heroActions"><a className="primaryButton" href="#intake">Reproduce an incident <span>-&gt;</span></a><a className="textButton" href="#workflow">See the workflow</a></div><div className="proofStrip"><div><strong>01</strong><span>Evidence in</span></div><div><strong>02</strong><span>Failure reproduced</span></div><div><strong>03</strong><span>Fix proven</span></div></div></div>

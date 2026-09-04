@@ -1,6 +1,17 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import { dark } from '@clerk/themes';
 
+// Shared surface treatment for every popover/menu/modal Clerk renders
+// (org switcher, user menu, "Create organization") — these are separate
+// component families from the main auth card and don't reliably inherit
+// its background/foreground, so every one is set explicitly below.
+const popoverSurface = {
+  background: '#182635',
+  border: '1px solid rgba(207,224,243,.16)',
+  boxShadow: '0 25px 70px rgba(0,0,0,.4)',
+  color: '#eef4ff',
+};
+
 const clerkAppearance = {
   baseTheme: dark,
   variables: {
@@ -53,6 +64,36 @@ const clerkAppearance = {
     // The label is sometimes a separate element from the button itself;
     // set both so the text color takes regardless of which one applies.
     socialButtonsBlockButtonText: { color: '#eef4ff' },
+
+    // Org switcher trigger pill in the sidebar.
+    organizationSwitcherTrigger: {
+      background: 'rgba(255,255,255,.035)',
+      border: '1px solid rgba(207,224,243,.16)',
+      color: '#eef4ff',
+    },
+    organizationPreviewMainIdentifier: { color: '#eef4ff' },
+    organizationPreviewSecondaryIdentifier: { color: '#8d99aa' },
+
+    // Popover cards: org switcher dropdown, "Create organization" modal.
+    organizationSwitcherPopoverCard: popoverSurface,
+    organizationSwitcherPopoverActionButton: { color: '#eef4ff' },
+    organizationSwitcherPopoverActionButtonText: { color: '#eef4ff' },
+    organizationSwitcherPreviewButton: { color: '#eef4ff' },
+    modalContent: popoverSurface,
+    modalCloseButton: { color: '#8d99aa' },
+
+    // User menu popover (profile / manage account / sign out).
+    userButtonPopoverCard: popoverSurface,
+    userButtonPopoverActionButton: { color: '#eef4ff' },
+    userButtonPopoverActionButtonText: { color: '#eef4ff' },
+    userButtonPopoverActionButtonIcon: { color: '#8d99aa' },
+    userButtonPopoverFooter: { background: 'transparent' },
+    userPreviewMainIdentifier: { color: '#eef4ff' },
+    userPreviewSecondaryIdentifier: { color: '#8d99aa' },
+
+    // Generic menu list/items used by several of the above.
+    menuList: popoverSurface,
+    menuItem: { color: '#eef4ff' },
   },
 };
 
