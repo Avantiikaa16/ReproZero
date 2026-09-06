@@ -87,6 +87,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       return Response.json({ run: { ...run, status: 'failed', result: { error: message } } }, { status: 200 });
     }
   } catch (error) {
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to run reproduction.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to run reproduction.', error);
+    return Response.json({ error: 'Failed to run reproduction.' }, { status: 500 });
   }
 }

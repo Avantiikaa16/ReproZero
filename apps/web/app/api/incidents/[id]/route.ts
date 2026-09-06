@@ -32,7 +32,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (error instanceof Error && 'status' in error) {
       return Response.json({ error: error.message }, { status: (error as { status: number }).status });
     }
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to load incident.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to load incident.', error);
+    return Response.json({ error: 'Failed to load incident.' }, { status: 500 });
   }
 }
 
@@ -113,6 +116,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (error instanceof Error && 'status' in error) {
       return Response.json({ error: error.message }, { status: (error as { status: number }).status });
     }
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to update incident.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to update incident.', error);
+    return Response.json({ error: 'Failed to update incident.' }, { status: 500 });
   }
 }

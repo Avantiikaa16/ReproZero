@@ -40,6 +40,9 @@ export async function POST() {
 
     return Response.json({ status: 'disconnected' });
   } catch (error) {
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to disconnect Jira.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to disconnect Jira.', error);
+    return Response.json({ error: 'Failed to disconnect Jira.' }, { status: 500 });
   }
 }

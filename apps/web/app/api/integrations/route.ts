@@ -21,6 +21,9 @@ export async function GET() {
 
     return Response.json({ connections });
   } catch (error) {
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to load integrations.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to load integrations.', error);
+    return Response.json({ error: 'Failed to load integrations.' }, { status: 500 });
   }
 }

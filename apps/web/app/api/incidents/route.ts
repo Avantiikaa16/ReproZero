@@ -15,7 +15,10 @@ export async function GET() {
       .orderBy(desc(incidents.updatedAt));
     return Response.json({ incidents: rows });
   } catch (error) {
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to load incidents.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to load incidents.', error);
+    return Response.json({ error: 'Failed to load incidents.' }, { status: 500 });
   }
 }
 
@@ -58,6 +61,9 @@ export async function POST(request: Request) {
 
     return Response.json({ incident }, { status: 201 });
   } catch (error) {
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to create incident.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to create incident.', error);
+    return Response.json({ error: 'Failed to create incident.' }, { status: 500 });
   }
 }

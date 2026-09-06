@@ -33,6 +33,9 @@ export async function GET(request: Request) {
 
     return Response.json(result);
   } catch (error) {
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to search Jira tickets.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to search Jira tickets.', error);
+    return Response.json({ error: 'Failed to search Jira tickets.' }, { status: 500 });
   }
 }

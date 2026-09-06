@@ -19,6 +19,9 @@ export async function GET() {
     const projects = await listJiraProjects(connection.id);
     return Response.json({ projects });
   } catch (error) {
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to list Jira projects.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to list Jira projects.', error);
+    return Response.json({ error: 'Failed to list Jira projects.' }, { status: 500 });
   }
 }

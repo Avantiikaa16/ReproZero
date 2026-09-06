@@ -88,6 +88,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ke
 
     return Response.json({ incident, jiraSnapshot: snapshot }, { status: existing ? 200 : 201 });
   } catch (error) {
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to import Jira ticket.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to import Jira ticket.', error);
+    return Response.json({ error: 'Failed to import Jira ticket.' }, { status: 500 });
   }
 }

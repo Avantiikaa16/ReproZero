@@ -46,6 +46,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return Response.json({ note }, { status: 201 });
   } catch (error) {
-    return authErrorResponse(error) ?? Response.json({ error: 'Failed to add note.' }, { status: 500 });
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to add note.', error);
+    return Response.json({ error: 'Failed to add note.' }, { status: 500 });
   }
 }
