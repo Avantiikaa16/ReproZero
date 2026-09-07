@@ -23,9 +23,12 @@ export default clerkMiddleware(async (auth, request) => {
 // `/`, `/sign-in`, `/sign-up`, and the always-public API routes (health,
 // the demo reproduce endpoint, Stripe webhook, Clerk webhook) intentionally
 // never pass through this middleware, so they keep working even before
-// real Clerk keys are configured. Every workspace-owned API route (under
-// /api/incidents and /api/integrations) IS matched, purely so auth() can
-// resolve inside them — see the authz check they each still run themselves.
+// real Clerk keys are configured. Every workspace-owned API route IS
+// matched, purely so auth() can resolve inside them — see the authz check
+// they each still run themselves. Any new workspace-owned API route added
+// under app/api/ MUST be added here too, or it will fail with a generic
+// 500 instead of a clean 401 — auth() throws rather than resolving
+// "signed out" for a request this middleware never touched.
 export const config = {
   matcher: [
     '/overview(.*)',
@@ -36,5 +39,8 @@ export const config = {
     '/settings(.*)',
     '/api/incidents(.*)',
     '/api/integrations(.*)',
+    '/api/organizations(.*)',
+    '/api/audit-events(.*)',
+    '/api/reproduction-runs(.*)',
   ],
 };

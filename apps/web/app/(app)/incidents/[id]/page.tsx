@@ -102,16 +102,23 @@ export default function IncidentDetailPage() {
     }
   };
 
-  const addNote = async () => {
+  const addNote = async (type: 'note' | 'request_info' = 'note') => {
     if (!noteText.trim()) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/incidents/${params.id}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'note', content: noteText }),
+        body: JSON.stringify({ type, content: noteText }),
       });
       if (response.ok) {
+        if (type === 'request_info' && incident?.status !== 'Evidence needed') {
+          await fetch(`/api/incidents/${params.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'Evidence needed' }),
+          });
+        }
         setNoteText('');
         load();
       }
@@ -237,7 +244,17 @@ export default function IncidentDetailPage() {
           <h2>Timeline</h2>
           <div className="noteComposer">
             <textarea rows={2} placeholder="Add a note, evidence, or update…" value={noteText} onChange={(event) => setNoteText(event.target.value)} />
-            <button className="primaryButtonSmall" disabled={busy || !noteText.trim()} onClick={addNote}>Add</button>
+            <div className="noteComposerActions">
+              <button className="primaryButtonSmall" disabled={busy || !noteText.trim()} onClick={() => addNote('note')}>Add</button>
+              <button
+                className="secondaryButton"
+                disabled={busy || !noteText.trim()}
+                onClick={() => addNote('request_info')}
+                title="Adds this note and moves the incident to 'Evidence needed'"
+              >
+                Request more evidence
+              </button>
+            </div>
           </div>
           <div className="noteTimeline">
             {notes.length === 0 && <p className="incidentSummary">No notes yet.</p>}
