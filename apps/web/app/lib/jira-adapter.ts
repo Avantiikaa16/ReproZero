@@ -7,7 +7,11 @@ import { decryptSecret, encryptSecret } from './secret-crypto';
 const AUTHORIZE_URL = 'https://auth.atlassian.com/authorize';
 const TOKEN_URL = 'https://auth.atlassian.com/oauth/token';
 const ACCESSIBLE_RESOURCES_URL = 'https://api.atlassian.com/oauth/token/accessible-resources';
-const JIRA_SCOPES = 'read:jira-work read:jira-user offline_access';
+// write:jira-work powers the explicit-confirmation comment/transition
+// write-back (Phase 3) — must also be enabled under Permissions > Jira API
+// > Configure ("Create and manage issues") in the Atlassian app console, or
+// Atlassian will reject the grant even though it's requested here.
+const JIRA_SCOPES = 'read:jira-work read:jira-user write:jira-work offline_access';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -128,10 +132,20 @@ export async function getValidJiraAccessToken(integrationConnectionId: string): 
   return { accessToken: refreshed.access_token, cloudId: config.cloudId };
 }
 
-async function jiraApiFetch(integrationConnectionId: string, path: string): Promise<Response> {
+async function jiraApiFetch(
+  integrationConnectionId: string,
+  path: string,
+  init?: { method?: string; body?: unknown },
+): Promise<Response> {
   const { accessToken, cloudId } = await getValidJiraAccessToken(integrationConnectionId);
   return fetch(`https://api.atlassian.com/ex/jira/${cloudId}${path}`, {
-    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    method: init?.method ?? 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: init?.body ? JSON.stringify(init.body) : undefined,
   });
 }
 
@@ -312,4 +326,37 @@ export async function getJiraTicketDetail(integrationConnectionId: string, key: 
     }),
     raw: payload,
   };
+}
+
+// --- Write-back (Phase 3): comment/transition, always behind an explicit
+// confirmation in the API route that calls these — never triggered as a
+// side effect of any read.
+
+export type JiraTransition = { id: string; name: string; to: string };
+
+export async function getJiraTransitions(integrationConnectionId: string, key: string): Promise<JiraTransition[]> {
+  const response = await jiraApiFetch(integrationConnectionId, `/rest/api/3/issue/${encodeURIComponent(key)}/transitions`);
+  if (!response.ok) throw new Error(`Failed to list Jira transitions: ${response.status}`);
+  const payload = (await response.json()) as { transitions: Array<{ id: string; name: string; to: { name: string } }> };
+  return payload.transitions.map((transition) => ({ id: transition.id, name: transition.name, to: transition.to.name }));
+}
+
+function toAdf(text: string) {
+  return { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] };
+}
+
+export async function postJiraComment(integrationConnectionId: string, key: string, body: string): Promise<void> {
+  const response = await jiraApiFetch(integrationConnectionId, `/rest/api/3/issue/${encodeURIComponent(key)}/comment`, {
+    method: 'POST',
+    body: { body: toAdf(body) },
+  });
+  if (!response.ok) throw new Error(`Failed to post Jira comment: ${response.status} ${await response.text()}`);
+}
+
+export async function transitionJiraIssue(integrationConnectionId: string, key: string, transitionId: string): Promise<void> {
+  const response = await jiraApiFetch(integrationConnectionId, `/rest/api/3/issue/${encodeURIComponent(key)}/transitions`, {
+    method: 'POST',
+    body: { transition: { id: transitionId } },
+  });
+  if (!response.ok) throw new Error(`Failed to transition Jira issue: ${response.status} ${await response.text()}`);
 }

@@ -1,6 +1,5 @@
 'use client';
 
-import { useUser } from '@clerk/nextjs';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -35,16 +34,26 @@ type JiraSnapshot = {
 
 type Note = { id: string; type: string; content: string; createdAt: string; metadata: Record<string, unknown> };
 type Run = { id: string; status: string; mode: string; result: Record<string, unknown>; createdAt: string };
+type Member = { userId: string; displayName: string | null; email: string; role: string };
+type JiraTransition = { id: string; name: string; to: string };
+type PendingWriteback =
+  | { action: 'comment'; body: string }
+  | { action: 'transition'; transitionId: string; transitionName: string };
 
 export default function IncidentDetailPage() {
   const params = useParams<{ id: string }>();
-  const { user } = useUser();
   const [incident, setIncident] = useState<Incident | null>(null);
   const [jiraSnapshot, setJiraSnapshot] = useState<JiraSnapshot | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [noteText, setNoteText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [transitions, setTransitions] = useState<JiraTransition[] | null>(null);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [selectedTransitionId, setSelectedTransitionId] = useState('');
+  const [pendingWriteback, setPendingWriteback] = useState<PendingWriteback | null>(null);
+  const [writebackError, setWritebackError] = useState<string | null>(null);
 
   const load = () => {
     fetch(`/api/incidents/${params.id}`)
@@ -62,6 +71,22 @@ export default function IncidentDetailPage() {
   };
 
   useEffect(load, [params.id]);
+
+  useEffect(() => {
+    fetch('/api/organizations/members')
+      .then(async (response) => (await response.json()) as { members: Member[] })
+      .then((payload) => setMembers(payload.members))
+      .catch(() => setMembers([]));
+  }, []);
+
+  useEffect(() => {
+    if (!jiraSnapshot) return;
+    fetch(`/api/incidents/${params.id}/jira-transitions`)
+      .then(async (response) => (await response.json()) as { transitions: JiraTransition[] })
+      .then((payload) => setTransitions(payload.transitions))
+      .catch(() => setTransitions([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jiraSnapshot?.externalKey]);
 
   const updateIncident = async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -116,6 +141,31 @@ export default function IncidentDetailPage() {
     }
   };
 
+  const confirmWriteback = async () => {
+    if (!pendingWriteback) return;
+    setBusy(true);
+    setWritebackError(null);
+    try {
+      const response = await fetch(`/api/incidents/${params.id}/jira-writeback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...pendingWriteback, confirmed: true }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? 'Failed to write back to Jira.');
+      }
+      setPendingWriteback(null);
+      setCommentDraft('');
+      setSelectedTransitionId('');
+      load();
+    } catch (error) {
+      setWritebackError(error instanceof Error ? error.message : 'Failed to write back to Jira.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (incident === null) {
     return (
       <div className="appPage">
@@ -148,13 +198,17 @@ export default function IncidentDetailPage() {
 
         <div className="incidentActionRow">
           <button className="secondaryButton" disabled={busy} onClick={runReproduction}>Run reproduction</button>
-          {incident.assigneeId ? (
-            <button className="secondaryButton" disabled={busy} onClick={() => updateIncident({ assigneeId: null })}>Unassign</button>
-          ) : (
-            <button className="secondaryButton" disabled={busy || !user} onClick={() => updateIncident({ assigneeId: 'me' })}>
-              Assign to me
-            </button>
-          )}
+          <select
+            className="statusSelect"
+            value={incident.assigneeId ?? ''}
+            disabled={busy}
+            onChange={(event) => updateIncident({ assigneeId: event.target.value || null })}
+          >
+            <option value="">Unassigned</option>
+            {members.map((member) => (
+              <option key={member.userId} value={member.userId}>{member.displayName || member.email}</option>
+            ))}
+          </select>
           {incident.status === 'Completed' ? (
             <button className="secondaryButton" disabled={busy} onClick={() => updateIncident({ status: 'New' })}>Reopen</button>
           ) : (
@@ -226,6 +280,66 @@ export default function IncidentDetailPage() {
               </div>
             )}
             <small className="jiraPanelSynced">Synced {new Date(jiraSnapshot.fetchedAt).toLocaleString()}</small>
+
+            <div className="jiraWriteback">
+              <label>
+                <span>Comment on Jira</span>
+                <textarea
+                  rows={2}
+                  placeholder="Write a comment…"
+                  value={commentDraft}
+                  onChange={(event) => setCommentDraft(event.target.value)}
+                />
+              </label>
+              <button
+                className="secondaryButton"
+                disabled={busy || !commentDraft.trim()}
+                onClick={() => setPendingWriteback({ action: 'comment', body: commentDraft })}
+              >
+                Preview &amp; post comment
+              </button>
+
+              {transitions && transitions.length > 0 && (
+                <div className="jiraTransitionRow">
+                  <select value={selectedTransitionId} onChange={(event) => setSelectedTransitionId(event.target.value)}>
+                    <option value="">Change Jira status…</option>
+                    {transitions.map((transition) => (
+                      <option key={transition.id} value={transition.id}>{transition.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="secondaryButton"
+                    disabled={busy || !selectedTransitionId}
+                    onClick={() => {
+                      const transition = transitions.find((candidate) => candidate.id === selectedTransitionId);
+                      if (transition) setPendingWriteback({ action: 'transition', transitionId: transition.id, transitionName: transition.name });
+                    }}
+                  >
+                    Preview transition
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {pendingWriteback && jiraSnapshot && (
+          <div className="writebackConfirm">
+            <strong>Confirm Jira write</strong>
+            {pendingWriteback.action === 'comment' ? (
+              <p>Post this comment to <b>{jiraSnapshot.externalKey}</b> in Jira:<br /><em>&ldquo;{pendingWriteback.body}&rdquo;</em></p>
+            ) : (
+              <p>Transition <b>{jiraSnapshot.externalKey}</b> to <b>{pendingWriteback.transitionName}</b> in Jira.</p>
+            )}
+            {writebackError && <p className="runSummaryError">{writebackError}</p>}
+            <div className="incidentActionRow">
+              <button className="secondaryButton" disabled={busy} onClick={() => { setPendingWriteback(null); setWritebackError(null); }}>
+                Cancel
+              </button>
+              <button className="primaryButtonSmall" disabled={busy} onClick={confirmWriteback}>
+                Confirm &amp; send to Jira
+              </button>
+            </div>
           </div>
         )}
       </aside>

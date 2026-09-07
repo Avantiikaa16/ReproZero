@@ -335,6 +335,14 @@ h1 em { display:block; color:var(--acid); font-style:normal; }
 .jiraComment b { display:block; font-size:11px; color:#dce7f3; }
 .jiraComment p { margin:2px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
 .jiraPanelSynced { color:#465565; font-size:10px; }
+.jiraWriteback { display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px solid var(--line); }
+.jiraWriteback label { display:flex; flex-direction:column; gap:5px; font-size:11px; color:var(--muted); }
+.jiraWriteback textarea, .jiraTransitionRow select { padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:rgba(4,13,20,.62); color:var(--ink); font:12px/1.5 var(--font-geist-sans); resize:vertical; }
+.jiraTransitionRow { display:flex; gap:8px; }
+.jiraTransitionRow select { flex:1; }
+.writebackConfirm { padding:16px; border:1px solid rgba(200,255,92,.25); border-radius:14px; background:rgba(200,255,92,.05); display:flex; flex-direction:column; gap:8px; }
+.writebackConfirm strong { font-size:13px; color:var(--acid); }
+.writebackConfirm p { margin:0; font-size:12px; line-height:1.6; color:var(--ink); }
 
 @media (max-width:1100px) {
   .incidentWorkspace { grid-template-columns:1fr; }

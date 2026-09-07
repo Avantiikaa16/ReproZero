@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../../../db/client';
-import { incidentNotes, incidentPriorities, incidentStatuses, incidents, jiraTicketSnapshots, reproductionRuns, users } from '../../../../db/schema';
+import { incidentNotes, incidentPriorities, incidentStatuses, incidents, jiraTicketSnapshots, memberships, reproductionRuns, users } from '../../../../db/schema';
 import { recordAuditEvent } from '../../../lib/audit';
 import { authErrorResponse, requireWorkspaceContext } from '../../../lib/auth-context';
 
@@ -61,8 +61,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (parsed.data.assigneeId === 'me') {
       parsed.data.assigneeId = context.userId;
     } else if (parsed.data.assigneeId) {
-      const [assignee] = await db.select({ id: users.id }).from(users).where(eq(users.id, parsed.data.assigneeId));
-      if (!assignee) return Response.json({ error: 'Assignee not found.' }, { status: 400 });
+      // Must be a member of THIS org, not merely a user that exists
+      // somewhere — otherwise any authenticated user could assign an
+      // incident to an arbitrary account outside the workspace.
+      const [assignee] = await db
+        .select({ id: users.id })
+        .from(memberships)
+        .innerJoin(users, eq(memberships.userId, users.id))
+        .where(and(eq(users.id, parsed.data.assigneeId), eq(memberships.organizationId, context.organizationId)));
+      if (!assignee) return Response.json({ error: 'Assignee is not a member of this organization.' }, { status: 400 });
     }
 
     const updates: Record<string, unknown> = { updatedAt: new Date() };
