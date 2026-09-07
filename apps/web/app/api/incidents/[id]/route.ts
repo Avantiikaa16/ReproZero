@@ -4,6 +4,7 @@ import { db } from '../../../../db/client';
 import { incidentNotes, incidentPriorities, incidentStatuses, incidents, jiraTicketSnapshots, memberships, reproductionRuns, users } from '../../../../db/schema';
 import { recordAuditEvent } from '../../../lib/audit';
 import { authErrorResponse, requireWorkspaceContext } from '../../../lib/auth-context';
+import { findSimilarMemories } from '../../../lib/memory-store';
 
 async function loadIncidentOrThrow(organizationId: string, id: string) {
   const [incident] = await db.select().from(incidents).where(and(eq(incidents.id, id), eq(incidents.organizationId, organizationId)));
@@ -26,8 +27,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
     const notes = await db.select().from(incidentNotes).where(eq(incidentNotes.incidentId, id)).orderBy(desc(incidentNotes.createdAt));
     const runs = await db.select().from(reproductionRuns).where(eq(reproductionRuns.incidentId, id)).orderBy(desc(reproductionRuns.createdAt));
+    const similarMemories = await findSimilarMemories(context.organizationId, `${incident.title} ${incident.summary ?? ''}`, id);
 
-    return Response.json({ incident, jiraSnapshot: latestSnapshot ?? null, notes, runs });
+    return Response.json({ incident, jiraSnapshot: latestSnapshot ?? null, notes, runs, similarMemories });
   } catch (error) {
     if (error instanceof Error && 'status' in error) {
       return Response.json({ error: error.message }, { status: (error as { status: number }).status });

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -39,6 +40,14 @@ type JiraTransition = { id: string; name: string; to: string };
 type PendingWriteback =
   | { action: 'comment'; body: string }
   | { action: 'transition'; transitionId: string; transitionName: string };
+type SimilarMemory = {
+  id: string;
+  title: string;
+  rootCause: string | null;
+  verifiedRepair: string | null;
+  incidentId: string | null;
+  sharedTerms: string[];
+};
 
 export default function IncidentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -54,15 +63,23 @@ export default function IncidentDetailPage() {
   const [selectedTransitionId, setSelectedTransitionId] = useState('');
   const [pendingWriteback, setPendingWriteback] = useState<PendingWriteback | null>(null);
   const [writebackError, setWritebackError] = useState<string | null>(null);
+  const [similarMemories, setSimilarMemories] = useState<SimilarMemory[]>([]);
 
   const load = () => {
     fetch(`/api/incidents/${params.id}`)
       .then(async (response) => {
         if (!response.ok) throw new Error('Not found');
-        return response.json() as Promise<{ incident: Incident; jiraSnapshot: JiraSnapshot | null; notes: Note[]; runs: Run[] }>;
+        return response.json() as Promise<{
+          incident: Incident;
+          jiraSnapshot: JiraSnapshot | null;
+          notes: Note[];
+          runs: Run[];
+          similarMemories: SimilarMemory[];
+        }>;
       })
       .then((payload) => {
         setIncident(payload.incident);
+        setSimilarMemories(payload.similarMemories ?? []);
         setJiraSnapshot(payload.jiraSnapshot);
         setNotes(payload.notes);
         setRuns(payload.runs);
@@ -237,6 +254,22 @@ export default function IncidentDetailPage() {
                 Verdict: {String((latestRun.result as { verdict?: string }).verdict ?? 'FIX_VERIFIED')} — see Reproductions for full evidence.
               </p>
             )}
+          </div>
+        )}
+
+        {similarMemories.length > 0 && (
+          <div className="similarMemories">
+            <h2>Similar incidents</h2>
+            {similarMemories.map((memory) => (
+              <div key={memory.id} className="similarMemoryRow">
+                <div>
+                  <strong>{memory.title}</strong>
+                  {memory.verifiedRepair && <p>{memory.verifiedRepair}</p>}
+                </div>
+                <small>shares: {memory.sharedTerms.join(', ')}</small>
+                {memory.incidentId && <Link href={`/incidents/${memory.incidentId}`} className="textLinkButton">View →</Link>}
+              </div>
+            ))}
           </div>
         )}
 

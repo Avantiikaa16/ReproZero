@@ -3,6 +3,8 @@ import { db } from '../../../../../db/client';
 import { incidentNotes, incidents, jiraTicketSnapshots, reproductionRuns } from '../../../../../db/schema';
 import { recordAuditEvent } from '../../../../lib/audit';
 import { authErrorResponse, requireWorkspaceContext } from '../../../../lib/auth-context';
+import { storeClaudeMemory } from '../../../../lib/live-integrations';
+import { storeMemoryReference } from '../../../../lib/memory-store';
 import { runReproduction } from '../../../../lib/repro-engine';
 
 /**
@@ -50,6 +52,20 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         type: 'system',
         content: 'Reproduction run succeeded (demo simulation).',
         metadata: { runId: run.id },
+      });
+
+      // Always stored in our own DB (the hosted abstraction Phase 7 calls
+      // for, since Vercel can't reach a local Claude-Mem worker). Also make
+      // a best-effort attempt at the live worker; `source` only ever says
+      // 'claude_mem_live' when that attempt genuinely succeeded — never as
+      // a default or an assumption.
+      const claudeMemAttempt = await storeClaudeMemory(result.memory.lesson, result.runId);
+      await storeMemoryReference({
+        organizationId: context.organizationId,
+        incidentId: id,
+        incidentTitle: incident.title,
+        result,
+        source: claudeMemAttempt.mode === 'live' ? 'claude_mem_live' : 'hosted',
       });
 
       await recordAuditEvent({

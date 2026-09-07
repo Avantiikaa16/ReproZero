@@ -8,3 +8,4 @@ export * from './jira-ticket-snapshots';
 export * from './incident-notes';
 export * from './audit-events';
 export * from './reproduction-runs';
+export * from './memory-references';
