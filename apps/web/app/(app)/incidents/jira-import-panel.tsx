@@ -20,7 +20,7 @@ export function JiraImportPanel({ onImported }: { onImported: () => void }) {
   const [priority, setPriority] = useState('');
   const [assignee, setAssignee] = useState('');
   const [startAt, setStartAt] = useState(0);
-  const [results, setResults] = useState<{ issues: JiraTicketSummary[]; total: number } | null>(null);
+  const [results, setResults] = useState<{ issues: JiraTicketSummary[]; hasMore: boolean } | null>(null);
   const [loading, setLoading] = useState(false);
   const [importingKey, setImportingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -95,8 +95,8 @@ export function JiraImportPanel({ onImported }: { onImported: () => void }) {
             <button className="secondaryButton" disabled={loading || startAt === 0} onClick={() => search(Math.max(0, startAt - PAGE_SIZE))}>
               Previous
             </button>
-            <span>{startAt + 1}–{Math.min(startAt + PAGE_SIZE, results.total)} of {results.total}</span>
-            <button className="secondaryButton" disabled={loading || startAt + PAGE_SIZE >= results.total} onClick={() => search(startAt + PAGE_SIZE)}>
+            <span>Showing {startAt + 1}–{startAt + results.issues.length}</span>
+            <button className="secondaryButton" disabled={loading || !results.hasMore} onClick={() => search(startAt + PAGE_SIZE)}>
               Next
             </button>
           </div>

@@ -174,7 +174,7 @@ export type JiraTicketSummary = {
 export async function searchJiraTickets(
   integrationConnectionId: string,
   params: JiraTicketSearchParams,
-): Promise<{ issues: JiraTicketSummary[]; total: number }> {
+): Promise<{ issues: JiraTicketSummary[]; hasMore: boolean }> {
   const clauses: string[] = [];
   if (params.projectKey) clauses.push(`project = "${params.projectKey}"`);
   if (params.status) clauses.push(`status = "${params.status}"`);
@@ -200,7 +200,9 @@ export async function searchJiraTickets(
   const response = await jiraApiFetch(integrationConnectionId, `/rest/api/3/search/jql?${search.toString()}`);
   if (!response.ok) throw new Error(`Jira ticket search failed: ${response.status} ${await response.text()}`);
   const payload = (await response.json()) as {
-    total: number;
+    // Jira Cloud's newer /search/jql endpoint doesn't return a total count
+    // at all (unlike the old /search endpoint) — hasMore below is derived
+    // from the page size instead, never from a total.
     issues: Array<{
       key: string;
       fields: {
@@ -214,8 +216,10 @@ export async function searchJiraTickets(
     }>;
   };
 
+  const maxResults = params.maxResults ?? 25;
+
   return {
-    total: payload.total,
+    hasMore: payload.issues.length >= maxResults,
     issues: payload.issues.map((issue) => ({
       key: issue.key,
       summary: issue.fields.summary,
