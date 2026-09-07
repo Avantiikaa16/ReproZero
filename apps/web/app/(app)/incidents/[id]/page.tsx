@@ -238,6 +238,7 @@ export default function IncidentDetailPage() {
           ) : (
             <button className="primaryButtonSmall" disabled={busy} onClick={() => updateIncident({ status: 'Completed' })}>Mark completed</button>
           )}
+          <a className="secondaryButton" href={`/api/incidents/${params.id}/evidence-bundle`}>Download evidence bundle</a>
         </div>
 
         {latestRun && (
@@ -250,9 +251,21 @@ export default function IncidentDetailPage() {
               <p className="runSummaryError">{latestRun.result.error}</p>
             )}
             {latestRun.status === 'succeeded' && (
-              <p className="runSummaryError" style={{ color: '#8fe28f' }}>
-                Verdict: {String((latestRun.result as { verdict?: string }).verdict ?? 'FIX_VERIFIED')} — see Reproductions for full evidence.
-              </p>
+              <>
+                <p className="runSummaryError" style={{ color: '#8fe28f' }}>
+                  Verdict: {String((latestRun.result as { verdict?: string }).verdict ?? 'FIX_VERIFIED')} — see Reproductions for full evidence.
+                </p>
+                {Array.isArray((latestRun.result as { codePath?: string[] }).codePath) && (
+                  <div className="codePathGraph">
+                    {((latestRun.result as { codePath: string[] }).codePath).map((entry, index, all) => (
+                      <div key={entry} className="codePathNode">
+                        <span>{entry}</span>
+                        {index < all.length - 1 && <i>↓</i>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

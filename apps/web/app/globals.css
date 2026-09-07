@@ -349,6 +349,10 @@ h1 em { display:block; color:var(--acid); font-style:normal; }
 .runSummaryHead { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
 .runSummaryHead strong { font-size:13px; }
 .runSummaryError { margin:0; color:#ff9c89; font-size:12px; line-height:1.6; }
+.codePathGraph { display:flex; flex-direction:column; align-items:flex-start; gap:2px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+.codePathNode { display:flex; flex-direction:column; align-items:flex-start; }
+.codePathNode span { padding:6px 10px; border:1px solid rgba(99,217,255,.25); border-radius:8px; background:rgba(99,217,255,.05); color:#8fcbdc; font:11px/1.4 var(--font-geist-mono); }
+.codePathNode i { padding-left:16px; color:var(--muted); font-style:normal; font-size:11px; }
 
 .incidentNotes { display:flex; flex-direction:column; gap:12px; }
 .incidentNotes h2 { margin:0; font-size:15px; }
