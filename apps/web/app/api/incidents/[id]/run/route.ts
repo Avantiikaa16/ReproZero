@@ -1,20 +1,38 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../../../../db/client';
 import { incidentNotes, incidents, jiraTicketSnapshots, reproductionRuns } from '../../../../../db/schema';
+import { awsFirewallDeletionAdapter, buildLiveAwsResult } from '../../../../lib/adapters/aws-firewall-deletion';
 import { recordAuditEvent } from '../../../../lib/audit';
 import { authErrorResponse, requireWorkspaceContext } from '../../../../lib/auth-context';
 import { storeClaudeMemory } from '../../../../lib/live-integrations';
 import { storeMemoryReference } from '../../../../lib/memory-store';
-import { runReproduction } from '../../../../lib/repro-engine';
+import { runReproduction, type ReproductionResult } from '../../../../lib/repro-engine';
+import { runAwsFirewallDeletionInSandbox } from '../../../../lib/sandbox-runner';
 
 /**
- * Runs the existing deterministic demo engine against this incident's
- * evidence. Only one reproduction adapter (the AWS DIT-1842 scenario)
- * exists today — Phase 8's adapter pattern isn't built yet — so most
- * incidents will honestly fail with "not yet supported" rather than
- * silently pretending to reproduce something the engine doesn't model.
- * mode stays 'demo_simulation'; nothing here executes real code.
+ * For the AWS DIT-1842 scenario, genuinely clones the demo repo into an
+ * isolated Vercel Sandbox and runs its real tests/verification (Phase 5).
+ * Every other adapter (and AWS itself, if the sandbox attempt fails for
+ * any reason — quota, network, transient error) falls back to the
+ * deterministic demo engine. `mode` always reflects what actually
+ * happened; a fallback never gets labeled 'live_sandbox'.
  */
+async function produceReproduction(input: {
+  evidenceType: 'ticket';
+  evidence: string;
+  repository: string;
+}): Promise<{ result: ReproductionResult; mode: 'live_sandbox' | 'demo_simulation' }> {
+  if (awsFirewallDeletionAdapter.canHandle(input)) {
+    try {
+      const live = await runAwsFirewallDeletionInSandbox();
+      return { result: buildLiveAwsResult(live), mode: 'live_sandbox' };
+    } catch (sandboxError) {
+      console.error('Live sandbox execution failed, falling back to demo simulation:', sandboxError);
+    }
+  }
+  return { result: runReproduction(input), mode: 'demo_simulation' };
+}
+
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await requireWorkspaceContext();
@@ -40,18 +58,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     await db.update(incidents).set({ status: 'Reproducing', updatedAt: new Date() }).where(eq(incidents.id, id));
 
     try {
-      const result = runReproduction({ evidenceType: 'ticket', evidence, repository: incident.repository ?? '' });
+      const { result, mode } = await produceReproduction({ evidenceType: 'ticket', evidence, repository: incident.repository ?? '' });
 
       await db
         .update(reproductionRuns)
-        .set({ status: 'succeeded', result, completedAt: new Date() })
+        .set({ status: 'succeeded', mode, result, completedAt: new Date() })
         .where(eq(reproductionRuns.id, run.id));
       await db.update(incidents).set({ status: 'Reproduced', updatedAt: new Date() }).where(eq(incidents.id, id));
       await db.insert(incidentNotes).values({
         incidentId: id,
         type: 'system',
-        content: 'Reproduction run succeeded (demo simulation).',
-        metadata: { runId: run.id },
+        content: `Reproduction run succeeded (${mode === 'live_sandbox' ? 'live sandbox execution' : 'demo simulation'}).`,
+        metadata: { runId: run.id, mode },
       });
 
       // Always stored in our own DB (the hosted abstraction Phase 7 calls
@@ -74,10 +92,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         action: 'incident.reproduction_run',
         resourceType: 'reproduction_run',
         resourceId: run.id,
-        metadata: { incidentId: id, mode: 'demo_simulation', outcome: 'succeeded' },
+        metadata: { incidentId: id, mode, outcome: 'succeeded' },
       });
 
-      return Response.json({ run: { ...run, status: 'succeeded', result } });
+      return Response.json({ run: { ...run, status: 'succeeded', mode, result } });
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : 'Reproduction failed.';
       await db
@@ -97,7 +115,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         action: 'incident.reproduction_run',
         resourceType: 'reproduction_run',
         resourceId: run.id,
-        metadata: { incidentId: id, mode: 'demo_simulation', outcome: 'failed', message },
+        metadata: { incidentId: id, outcome: 'failed', message },
       });
 
       return Response.json({ run: { ...run, status: 'failed', result: { error: message } } }, { status: 200 });

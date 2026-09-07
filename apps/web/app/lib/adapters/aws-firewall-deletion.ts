@@ -1,4 +1,5 @@
-import type { ReproductionAdapter } from './types';
+import type { LiveAwsVerification } from '../sandbox-runner';
+import type { ReproductionAdapter, ReproductionResult } from './types';
 
 const trace = [
   { action: 'disassociateElasticIp(eipalloc-demo-301)', result: 'success' },
@@ -67,3 +68,32 @@ export const awsFirewallDeletionAdapter: ReproductionAdapter = {
     };
   },
 };
+
+/**
+ * Substitutes real, sandbox-captured failure/verification/trace data into
+ * the same result shape the demo adapter produces — the static commentary
+ * (patch text, code path, memory lesson) doesn't change, since those
+ * describe the real fix that's actually in the demo repo either way; only
+ * the parts that genuinely differ between a simulation and a real run are
+ * replaced. Phase 8's whole point: the rest of the app never needs to know
+ * which one produced this result.
+ */
+export function buildLiveAwsResult(live: LiveAwsVerification): ReproductionResult {
+  const base = awsFirewallDeletionAdapter.run({ evidenceType: 'ticket', evidence: 'dit-1842', repository: '' });
+  return {
+    ...base,
+    verdict: live.verdict,
+    failure: {
+      errorCode: live.before.error?.code ?? 'Unknown',
+      message: live.before.error?.message ?? '',
+      firewallState: live.before.firewall.state,
+      trace: live.before.trace.map((event) => ({ action: `${event.action}(${event.resourceId})`, result: event.result })),
+    },
+    verification: {
+      before: { state: live.before.firewall.state, testsPassing: 0 },
+      after: { state: live.after.firewall.state, testsPassing: live.testsPassing },
+      totalTests: live.totalTests,
+    },
+    integrations: { ...base.integrations, aws: 'live_sandbox' },
+  };
+}

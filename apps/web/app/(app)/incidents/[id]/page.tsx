@@ -244,7 +244,9 @@ export default function IncidentDetailPage() {
         {latestRun && (
           <div className="runSummaryCard">
             <div className="runSummaryHead">
-              <span className="appStatusPill demo">Demo simulation</span>
+              <span className={`appStatusPill ${latestRun.mode === 'live_sandbox' ? 'live' : 'demo'}`}>
+                {latestRun.mode === 'live_sandbox' ? 'Live sandbox execution' : 'Demo simulation'}
+              </span>
               <strong>{latestRun.status === 'succeeded' ? 'Reproduction verified' : latestRun.status === 'failed' ? 'Reproduction not supported yet' : 'Running…'}</strong>
             </div>
             {latestRun.status === 'failed' && typeof latestRun.result.error === 'string' && (
