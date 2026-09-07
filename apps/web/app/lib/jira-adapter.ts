@@ -182,6 +182,12 @@ export async function searchJiraTickets(
   if (params.assignee) clauses.push(`assignee = "${params.assignee}"`);
   if (params.labels?.length) clauses.push(`labels in (${params.labels.map((label) => `"${label}"`).join(',')})`);
   if (params.query) clauses.push(`text ~ "${params.query.replace(/"/g, '\\"')}"`);
+  // Jira Cloud's search API rejects a JQL with no restricting clause at
+  // all ("Unbounded JQL queries are not allowed") — searching with every
+  // filter left blank needs a real one, so this adds a practically
+  // unrestrictive one (created any time in the last ~50 years) purely to
+  // satisfy that requirement without meaningfully narrowing results.
+  if (clauses.length === 0) clauses.push('created >= -18250d');
   const jql = `${clauses.join(' AND ')} ORDER BY updated DESC`;
 
   const search = new URLSearchParams({
