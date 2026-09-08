@@ -96,7 +96,10 @@ export async function runAwsFirewallDeletionInSandbox(): Promise<LiveAwsVerifica
     commands: [
       { cmd: 'npm', args: ['install'] },
       { cmd: 'npm', args: ['test'] },
-      { cmd: 'npm', args: ['run', 'verify'] },
+      // --silent suppresses npm's own "> pkg@version verify\n> node ..."
+      // echo, which otherwise gets prepended to the script's actual stdout
+      // and breaks JSON.parse below.
+      { cmd: 'npm', args: ['run', 'verify', '--silent'] },
     ],
   });
 
@@ -107,12 +110,23 @@ export async function runAwsFirewallDeletionInSandbox(): Promise<LiveAwsVerifica
     throw new Error(`Sandbox verification script failed (exit ${verify.exitCode}): ${verify.stderr.slice(0, 500)}`);
   }
 
-  const parsed = JSON.parse(verify.stdout) as Omit<LiveAwsVerification, 'testsPassing' | 'totalTests' | 'rawVerifyOutput' | 'rawTestOutput'>;
+  // Defense in depth beyond --silent: extract just the JSON object rather
+  // than trusting the whole stdout is clean, in case npm (or any future
+  // change to the script) prints anything else around it.
+  const jsonStart = verify.stdout.indexOf('{');
+  const jsonEnd = verify.stdout.lastIndexOf('}');
+  if (jsonStart === -1 || jsonEnd === -1) {
+    throw new Error(`Sandbox verification script produced no parseable JSON output: ${verify.stdout.slice(0, 500)}`);
+  }
+  const parsed = JSON.parse(verify.stdout.slice(jsonStart, jsonEnd + 1)) as Omit<
+    LiveAwsVerification,
+    'testsPassing' | 'totalTests' | 'rawVerifyOutput' | 'rawTestOutput'
+  >;
 
-  // Node's built-in test runner prints a TAP-ish summary; parse the real
-  // pass/total counts rather than assuming a fixed number.
-  const passMatch = test.stdout.match(/# pass (\d+)/);
-  const totalMatch = test.stdout.match(/# tests (\d+)/);
+  // Node's built-in test runner prints its summary lines prefixed with "ℹ"
+  // (info), not "#" — verified against real sandbox output, not assumed.
+  const passMatch = test.stdout.match(/ℹ pass (\d+)/);
+  const totalMatch = test.stdout.match(/ℹ tests (\d+)/);
 
   return {
     ...parsed,
