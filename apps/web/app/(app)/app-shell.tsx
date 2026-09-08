@@ -11,7 +11,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="appShell">
       <aside className="appSidebar">
-        <Link className="brand appBrand" href="/overview">
+        <Link className="brand appBrand" href="/" title="Back to the public homepage">
           <span className="brandMark">R0</span>
           <span>ReproZero</span>
         </Link>

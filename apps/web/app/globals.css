@@ -13,6 +13,11 @@ button { font:inherit; }
 .navLinks { display:flex; align-items:center; gap:30px; color:#a9b4c2; font-size:13px; }
 .navLinks a:hover { color:white; }
 .navCta { padding:10px 14px; border:1px solid var(--line); border-radius:10px; background:rgba(255,255,255,.035); color:white!important; }
+.previewBanner { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:14px auto 0; padding:11px 18px; border:1px solid rgba(99,217,255,.22); border-radius:11px; background:rgba(99,217,255,.055); color:#cfe8f3; font-size:13px; line-height:1.5; }
+.previewBanner a { color:var(--sky); text-decoration:underline; }
+.previewBanner button { flex-shrink:0; border:none; background:none; color:#cfe8f3; font-size:16px; cursor:pointer; opacity:.6; }
+.previewBanner button:hover { opacity:1; }
+@media (max-width:620px) { .previewBanner { flex-direction:column; align-items:flex-start; } }
 .hero { min-height:calc(100vh - 86px); display:grid; grid-template-columns:.92fr 1.08fr; align-items:center; gap:72px; padding-block:58px 88px; }
 .eyebrow { display:flex; align-items:center; gap:9px; margin-bottom:28px; color:#aab7c5; font:600 11px/1 var(--font-geist-mono); text-transform:uppercase; letter-spacing:.12em; }
 .eyebrow span { width:8px; height:8px; border-radius:50%; background:var(--acid); box-shadow:0 0 0 5px rgba(200,255,92,.1),0 0 18px rgba(200,255,92,.35); }

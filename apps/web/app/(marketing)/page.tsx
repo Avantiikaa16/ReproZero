@@ -22,6 +22,59 @@ function AuthAwareNavLinks() {
   </>;
 }
 
+// One-time explainer for first-time visitors: this page is a stateless
+// preview, not the product itself — the real, persistent workspace lives
+// behind sign-up. Dismissed state is per-browser (localStorage), so it
+// only nags once, not on every visit.
+function AuthAwareBanner() {
+  const { isSignedIn, isLoaded } = useAuth();
+  // Deliberately starts false on both server and client render (never
+  // read from localStorage synchronously here) to avoid a hydration
+  // mismatch — localStorage doesn't exist during SSR, so a lazy
+  // initializer reading it would disagree with the server-rendered HTML
+  // whenever a returning visitor had already dismissed it. The effect
+  // below is the correct place to sync from a browser-only store after
+  // mount, unlike the nav banner's searchParams case, which is available
+  // identically on both sides and doesn't need one.
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('reprozero_banner_dismissed')) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing from a browser-only API after mount, not derivable during render
+        setDismissed(true);
+      }
+    } catch {
+      // Private browsing / storage blocked — leave the banner visible.
+    }
+  }, []);
+
+  if (!isLoaded || dismissed) return null;
+
+  const dismiss = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem('reprozero_banner_dismissed', '1');
+    } catch {
+      // Nothing to persist if storage is unavailable; the banner just
+      // reappears next visit, which is an acceptable fallback.
+    }
+  };
+
+  return (
+    <div className="previewBanner shell">
+      <span>
+        {isSignedIn ? (
+          <>You&apos;re signed in — click <b>Go to workspace</b> above anytime to get back to your incidents.</>
+        ) : (
+          <>This page is a live, stateless preview — nothing here is saved. <Link href="/sign-up">Sign up</Link> for your own persistent workspace with real Jira integration, incident history, and reproduction runs.</>
+        )}
+      </span>
+      <button onClick={dismiss} aria-label="Dismiss">×</button>
+    </div>
+  );
+}
+
 const stages = [
   ['Codex', 'Extracted 8 facts and generated ReproSpec'],
   ['Claude-Mem', 'Searched prior incident memory - cold start'],
@@ -196,6 +249,7 @@ export default function Home() {
 
   return <main>
     <nav className="nav shell"><a className="brand" href="#top"><span className="brandMark">R0</span><span>ReproZero</span></a><div className="navLinks"><a href="#workflow">How it works</a><a href="#integrations">Integrations</a><a href="#intake">Try the demo</a>{clerkConfigured ? <AuthAwareNavLinks /> : <><Link href="/sign-in">Sign in</Link><Link className="navCta" href="/sign-up">Sign up</Link></>}</div></nav>
+    {clerkConfigured && <AuthAwareBanner />}
 
     <section className="hero shell" id="top">
       <div className="heroCopy"><div className="eyebrow"><span /> Built for production incidents</div><h1>Turn the ticket into a <em>running failure.</em></h1><p className="heroLead">ReproZero compiles tickets, logs, and repository context into a minimal executable reproduction - then proves the repair against the exact same failure.</p><div className="heroActions"><a className="primaryButton" href="#intake">Reproduce an incident <span>-&gt;</span></a><a className="textButton" href="#workflow">See the workflow</a></div><div className="proofStrip"><div><strong>01</strong><span>Evidence in</span></div><div><strong>02</strong><span>Failure reproduced</span></div><div><strong>03</strong><span>Fix proven</span></div></div></div>
