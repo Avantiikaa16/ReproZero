@@ -1,7 +1,7 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../../db/client';
-import { incidentPriorities, incidents } from '../../../db/schema';
+import { incidentPriorities, incidents, projects } from '../../../db/schema';
 import { recordAuditEvent } from '../../lib/audit';
 import { authErrorResponse, requireWorkspaceContext } from '../../lib/auth-context';
 
@@ -27,6 +27,7 @@ const createIncidentSchema = z.object({
   summary: z.string().max(4000).optional(),
   priority: z.enum(incidentPriorities).optional(),
   repository: z.string().max(500).optional(),
+  projectId: z.string().uuid().optional(),
 });
 
 export async function POST(request: Request) {
@@ -37,6 +38,18 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Invalid incident payload.', issues: parsed.error.issues }, { status: 400 });
     }
 
+    let repository = parsed.data.repository;
+    if (parsed.data.projectId) {
+      const [project] = await db
+        .select({ repository: projects.repository })
+        .from(projects)
+        .where(and(eq(projects.id, parsed.data.projectId), eq(projects.organizationId, context.organizationId)));
+      if (!project) return Response.json({ error: 'Project not found.' }, { status: 400 });
+      // The linked project's repo is the source of truth once set — keep
+      // this field in sync so the plain-text display never disagrees with it.
+      repository = project.repository;
+    }
+
     const [incident] = await db
       .insert(incidents)
       .values({
@@ -44,7 +57,8 @@ export async function POST(request: Request) {
         title: parsed.data.title,
         summary: parsed.data.summary,
         priority: parsed.data.priority,
-        repository: parsed.data.repository,
+        repository,
+        projectId: parsed.data.projectId,
         createdBy: context.userId,
         status: 'New',
       })

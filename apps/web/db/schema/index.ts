@@ -9,3 +9,4 @@ export * from './incident-notes';
 export * from './audit-events';
 export * from './reproduction-runs';
 export * from './memory-references';
+export * from './projects';

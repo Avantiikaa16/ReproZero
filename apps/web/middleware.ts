@@ -43,5 +43,6 @@ export const config = {
     '/api/audit-events(.*)',
     '/api/reproduction-runs(.*)',
     '/api/memory(.*)',
+    '/api/projects(.*)',
   ],
 };

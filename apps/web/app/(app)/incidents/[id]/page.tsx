@@ -52,6 +52,7 @@ type RunResult = {
   verification?: { before: { state: string; testsPassing: number }; after: { state: string; testsPassing: number }; totalTests: number };
   terminalOutput?: string;
 };
+type Project = { id: string; name: string; repository: string; defaultBranch: string };
 type SimilarMemory = {
   id: string;
   title: string;
@@ -85,6 +86,7 @@ export default function IncidentDetailPage() {
   const [githubActionError, setGithubActionError] = useState<string | null>(null);
   const [githubActionResultUrl, setGithubActionResultUrl] = useState<string | null>(null);
   const [patchCopied, setPatchCopied] = useState(false);
+  const [project, setProject] = useState<Project | null>(null);
 
   const load = () => {
     fetch(`/api/incidents/${params.id}`)
@@ -96,6 +98,7 @@ export default function IncidentDetailPage() {
           notes: Note[];
           runs: Run[];
           similarMemories: SimilarMemory[];
+          project: Project | null;
         }>;
       })
       .then((payload) => {
@@ -104,6 +107,7 @@ export default function IncidentDetailPage() {
         setJiraSnapshot(payload.jiraSnapshot);
         setNotes(payload.notes);
         setRuns(payload.runs);
+        setProject(payload.project);
       })
       .catch(() => setIncident(null));
   };
@@ -413,7 +417,7 @@ export default function IncidentDetailPage() {
                   <button
                     className="secondaryButton"
                     disabled={busy || !branchNameDraft.trim()}
-                    onClick={() => setPendingGithubAction({ action: 'create_branch', branchName: branchNameDraft.trim(), baseBranch: 'main' })}
+                    onClick={() => setPendingGithubAction({ action: 'create_branch', branchName: branchNameDraft.trim(), baseBranch: project?.defaultBranch ?? 'main' })}
                   >
                     Preview branch creation
                   </button>
@@ -431,7 +435,7 @@ export default function IncidentDetailPage() {
                 <button
                   className="secondaryButton"
                   disabled={busy || !prHeadDraft.trim() || !prTitleDraft.trim()}
-                  onClick={() => setPendingGithubAction({ action: 'create_pr', head: prHeadDraft.trim(), base: 'main', title: prTitleDraft.trim(), body: prBodyDraft })}
+                  onClick={() => setPendingGithubAction({ action: 'create_pr', head: prHeadDraft.trim(), base: project?.defaultBranch ?? 'main', title: prTitleDraft.trim(), body: prBodyDraft })}
                 >
                   Preview draft pull request
                 </button>

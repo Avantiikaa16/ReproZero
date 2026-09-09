@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../../../db/client';
-import { incidentNotes, incidentPriorities, incidentStatuses, incidents, jiraTicketSnapshots, memberships, reproductionRuns, users } from '../../../../db/schema';
+import { incidentNotes, incidentPriorities, incidentStatuses, incidents, jiraTicketSnapshots, memberships, projects, reproductionRuns, users } from '../../../../db/schema';
 import { recordAuditEvent } from '../../../lib/audit';
 import { authErrorResponse, requireWorkspaceContext } from '../../../lib/auth-context';
 import { findSimilarMemories } from '../../../lib/memory-store';
@@ -29,7 +29,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const runs = await db.select().from(reproductionRuns).where(eq(reproductionRuns.incidentId, id)).orderBy(desc(reproductionRuns.createdAt));
     const similarMemories = await findSimilarMemories(context.organizationId, `${incident.title} ${incident.summary ?? ''}`, id);
 
-    return Response.json({ incident, jiraSnapshot: latestSnapshot ?? null, notes, runs, similarMemories });
+    let project = null;
+    if (incident.projectId) {
+      const [row] = await db.select().from(projects).where(eq(projects.id, incident.projectId));
+      project = row ?? null;
+    }
+
+    return Response.json({ incident, jiraSnapshot: latestSnapshot ?? null, notes, runs, similarMemories, project });
   } catch (error) {
     if (error instanceof Error && 'status' in error) {
       return Response.json({ error: error.message }, { status: (error as { status: number }).status });

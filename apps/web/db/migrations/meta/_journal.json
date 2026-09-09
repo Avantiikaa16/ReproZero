@@ -29,6 +29,13 @@
       "when": 1788768344331,
       "tag": "0003_memory_references",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788938967319,
+      "tag": "0004_projects",
+      "breakpoints": true
     }
   ]
 }

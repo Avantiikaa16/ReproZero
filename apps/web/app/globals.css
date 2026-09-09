@@ -266,6 +266,7 @@ h1 em { display:block; color:var(--acid); font-style:normal; }
 .settingsRow:not(:last-child) { border-bottom:1px solid var(--line); }
 .settingsRow span { color:var(--muted); }
 .settingsRole { text-transform:uppercase; font:650 10px/1 var(--font-geist-mono); letter-spacing:.05em; color:var(--sky); }
+.settingsProjectRepo { display:inline-block; margin-left:8px; color:var(--muted); font:11px/1 var(--font-geist-mono); }
 .auditLog { display:flex; flex-direction:column; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:rgba(255,255,255,.02); }
 .auditLogRow { display:grid; grid-template-columns:1.4fr 1fr .9fr 1.1fr; gap:10px; padding:10px 14px; font-size:12px; }
 .auditLogRow:not(:first-child) { border-top:1px solid var(--line); }
@@ -309,7 +310,7 @@ h1 em { display:block; color:var(--acid); font-style:normal; }
 /* Incidents list */
 .incidentCreateForm { display:flex; flex-direction:column; gap:12px; padding:18px; border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.03); }
 .incidentCreateForm label { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--muted); }
-.incidentCreateForm input, .incidentCreateForm textarea { padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:rgba(4,13,20,.62); color:var(--ink); font:13px/1.5 var(--font-geist-sans); resize:vertical; }
+.incidentCreateForm input, .incidentCreateForm textarea, .incidentCreateForm select { padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:rgba(4,13,20,.62); color:var(--ink); font:13px/1.5 var(--font-geist-sans); resize:vertical; }
 .incidentCreateForm input::placeholder, .incidentCreateForm textarea::placeholder { color:#465565; }
 .incidentCreateForm > button { align-self:flex-start; }
 

@@ -1,6 +1,7 @@
 import { integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { integrationConnections } from './integration-connections';
 import { organizations } from './organizations';
+import { projects } from './projects';
 import { users } from './users';
 
 export const incidentStatuses = [
@@ -39,7 +40,12 @@ export const incidents = pgTable('incidents', {
   priority: text('priority', { enum: incidentPriorities }),
   assigneeId: uuid('assignee_id').references(() => users.id, { onDelete: 'set null' }),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  // Free text, kept for incidents without a linked project (e.g. imported
+  // before a project existed, or a one-off repo). When projectId is set,
+  // the project's own repository/defaultBranch are the source of truth for
+  // GitHub actions — this field becomes a display fallback, not deleted.
   repository: text('repository'),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   environmentDetails: jsonb('environment_details').notNull().default({}),
   integrationConnectionId: uuid('integration_connection_id').references(() => integrationConnections.id, { onDelete: 'set null' }),
   externalTicketKey: text('external_ticket_key'),

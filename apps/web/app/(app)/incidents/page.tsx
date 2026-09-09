@@ -13,13 +13,16 @@ type Incident = {
   externalTicketKey: string | null;
   updatedAt: string;
 };
+type Project = { id: string; name: string };
 
 export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[] | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showJiraImport, setShowJiraImport] = useState(false);
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
+  const [projectId, setProjectId] = useState('');
   const [creating, setCreating] = useState(false);
 
   const load = () => {
@@ -29,7 +32,13 @@ export default function IncidentsPage() {
       .catch(() => setIncidents([]));
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    fetch('/api/projects')
+      .then(async (response) => (await response.json()) as { projects: Project[] })
+      .then((payload) => setProjects(payload.projects))
+      .catch(() => setProjects([]));
+  }, []);
 
   const createIncident = async () => {
     if (!title.trim()) return;
@@ -38,11 +47,12 @@ export default function IncidentsPage() {
       const response = await fetch('/api/incidents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, summary: summary || undefined }),
+        body: JSON.stringify({ title, summary: summary || undefined, projectId: projectId || undefined }),
       });
       if (!response.ok) throw new Error('Failed to create incident.');
       setTitle('');
       setSummary('');
+      setProjectId('');
       setShowCreate(false);
       load();
     } finally {
@@ -78,6 +88,15 @@ export default function IncidentsPage() {
             <span>Summary (optional)</span>
             <textarea value={summary} onChange={(event) => setSummary(event.target.value)} rows={3} placeholder="What's known so far…" />
           </label>
+          {projects.length > 0 && (
+            <label>
+              <span>Project (optional)</span>
+              <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+                <option value="">No linked project</option>
+                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
+            </label>
+          )}
           <button className="primaryButtonSmall" disabled={creating || !title.trim()} onClick={createIncident}>
             {creating ? 'Creating…' : 'Create incident'}
           </button>
