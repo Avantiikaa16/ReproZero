@@ -426,3 +426,16 @@ h1 em { display:block; color:var(--acid); font-style:normal; }
   .incidentWorkspace { grid-template-columns:1fr; }
   .jiraPanel { position:static; }
 }
+
+/* Public showcase page (app/(marketing)/showcase/[slug]) */
+.showcasePage { max-width:760px; margin:60px auto 90px; padding:0 20px; display:flex; flex-direction:column; gap:20px; }
+.showcasePage h1 { margin:6px 0 0; font-size:28px; letter-spacing:-.02em; }
+.showcaseEyebrow { margin:0; color:var(--sky); font:600 11px/1 var(--font-geist-mono); text-transform:uppercase; letter-spacing:.06em; }
+.showcaseMeta { display:flex; flex-wrap:wrap; gap:9px; align-items:center; color:var(--muted); font-size:12px; }
+.showcaseFooterCta { margin-top:10px; padding:20px; border:1px solid var(--line); border-radius:14px; background:rgba(200,255,92,.04); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; }
+.showcaseFooterCta p { margin:0; max-width:440px; color:var(--muted); font-size:13px; line-height:1.6; }
+
+/* Public-sharing controls on the authenticated incident detail page */
+.publicShareRow { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:8px; }
+.publicShareRow input { flex:1; min-width:160px; }
+.publicShareLink { display:flex; align-items:center; gap:8px; font:12px/1 var(--font-geist-mono); color:var(--sky); word-break:break-all; }

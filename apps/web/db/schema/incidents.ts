@@ -51,6 +51,12 @@ export const incidents = pgTable('incidents', {
   externalTicketKey: text('external_ticket_key'),
   reopenedCount: integer('reopened_count').notNull().default(0),
   completedAt: timestamp('completed_at', { withTimezone: true }),
+  // Null = private (the default for every incident). Set only via an
+  // explicit "make public" action (see /api/incidents/[id]/public-share) —
+  // never inferred or defaulted on. When set, GET /api/showcase/[slug]
+  // serves a deliberately narrow, read-only view of this one incident with
+  // no authentication — see that route for exactly what is/isn't exposed.
+  publicSlug: text('public_slug').unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

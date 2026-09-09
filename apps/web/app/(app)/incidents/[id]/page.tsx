@@ -20,7 +20,16 @@ type Incident = {
   reopenedCount: number;
   repository: string | null;
   projectId: string | null;
+  publicSlug: string | null;
 };
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+}
 
 type JiraSnapshot = {
   externalKey: string;
@@ -91,6 +100,11 @@ export default function IncidentDetailPage() {
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [projectPickerValue, setProjectPickerValue] = useState('');
+  const [showPublicSharePicker, setShowPublicSharePicker] = useState(false);
+  const [publicSlugDraft, setPublicSlugDraft] = useState('');
+  const [pendingPublicShare, setPendingPublicShare] = useState<{ enable: boolean; slug?: string } | null>(null);
+  const [publicShareError, setPublicShareError] = useState<string | null>(null);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
 
   const load = () => {
     fetch(`/api/incidents/${params.id}`)
@@ -259,6 +273,36 @@ export default function IncidentDetailPage() {
     setShowProjectPicker(false);
   };
 
+  const confirmPublicShare = async () => {
+    if (!pendingPublicShare) return;
+    setBusy(true);
+    setPublicShareError(null);
+    try {
+      const response = await fetch(`/api/incidents/${params.id}/public-share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pendingPublicShare),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? 'Failed to update public sharing.');
+      }
+      setPendingPublicShare(null);
+      setShowPublicSharePicker(false);
+      load();
+    } catch (error) {
+      setPublicShareError(error instanceof Error ? error.message : 'Failed to update public sharing.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyShowcaseLink = async (slug: string) => {
+    await navigator.clipboard.writeText(`${window.location.origin}/showcase/${slug}`);
+    setShareLinkCopied(true);
+    setTimeout(() => setShareLinkCopied(false), 1800);
+  };
+
   const copyPatch = async (diff: string) => {
     await navigator.clipboard.writeText(diff);
     setPatchCopied(true);
@@ -323,6 +367,59 @@ export default function IncidentDetailPage() {
             >
               Open repository
             </a>
+          )}
+        </div>
+
+        <div className="githubActions">
+          <h2>Public showcase</h2>
+          {incident.publicSlug ? (
+            <div className="publicShareRow">
+              <span className="publicShareLink">{typeof window !== 'undefined' ? window.location.origin : ''}/showcase/{incident.publicSlug}</span>
+              <button className="textLinkButton" onClick={() => copyShowcaseLink(incident.publicSlug!)}>{shareLinkCopied ? '✓ Copied' : 'Copy link'}</button>
+              <button className="secondaryButton" disabled={busy} onClick={() => setPendingPublicShare({ enable: false })}>Make private</button>
+            </div>
+          ) : showPublicSharePicker ? (
+            <div className="publicShareRow">
+              <input placeholder="url-friendly-slug" value={publicSlugDraft} onChange={(event) => setPublicSlugDraft(slugify(event.target.value))} />
+              <button
+                className="primaryButtonSmall"
+                disabled={busy || !publicSlugDraft.trim()}
+                onClick={() => setPendingPublicShare({ enable: true, slug: publicSlugDraft.trim() })}
+              >
+                Preview &amp; make public
+              </button>
+              <button className="secondaryButton" disabled={busy} onClick={() => setShowPublicSharePicker(false)}>Cancel</button>
+            </div>
+          ) : (
+            <p className="incidentSummary">
+              Private — only this workspace can see it.{' '}
+              <button className="textLinkButton" onClick={() => { setPublicSlugDraft(slugify(incident.title)); setShowPublicSharePicker(true); }}>
+                Make public
+              </button>
+            </p>
+          )}
+          {pendingPublicShare && (
+            <div className="writebackConfirm">
+              <strong>{pendingPublicShare.enable ? 'Confirm making this public' : 'Confirm making this private'}</strong>
+              {pendingPublicShare.enable ? (
+                <p>
+                  Anyone with the link <b>/showcase/{pendingPublicShare.slug}</b> will be able to view this incident&apos;s title,
+                  summary, timeline, and reproduction evidence — no login required. Nothing else in this workspace becomes visible,
+                  and it stays private until you confirm.
+                </p>
+              ) : (
+                <p>The public link stops working immediately. Anyone who already viewed or saved it may still have seen its contents.</p>
+              )}
+              {publicShareError && <p className="runSummaryError">{publicShareError}</p>}
+              <div className="incidentActionRow">
+                <button className="secondaryButton" disabled={busy} onClick={() => { setPendingPublicShare(null); setPublicShareError(null); }}>
+                  Cancel
+                </button>
+                <button className="primaryButtonSmall" disabled={busy} onClick={confirmPublicShare}>
+                  {pendingPublicShare.enable ? 'Confirm & make public' : 'Confirm & make private'}
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
