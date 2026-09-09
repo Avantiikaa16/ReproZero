@@ -378,6 +378,9 @@ h1 em { display:block; color:var(--acid); font-style:normal; }
 .patchViewerHead { display:flex; align-items:center; justify-content:space-between; }
 .patchViewerHead span { font:11px/1 var(--font-geist-mono); color:#dce7f3; }
 .diffViewer { margin:8px 0 0; padding:12px; border:1px solid var(--line); border-radius:10px; background:rgba(4,13,20,.62); color:#a7d8c8; font:11px/1.6 var(--font-geist-mono); overflow-x:auto; white-space:pre; }
+.patchEditLink { display:inline-flex; align-items:center; gap:6px; margin-top:10px; padding:7px 11px; border:1px solid rgba(99,217,255,.25); border-radius:8px; background:rgba(99,217,255,.05); color:var(--sky); font-size:12px; font-weight:600; }
+.patchEditLink:hover { border-color:rgba(99,217,255,.45); background:rgba(99,217,255,.09); }
+.patchNote { display:block; margin-top:8px; color:#6b7b8a; font-size:11px; line-height:1.6; }
 
 .terminalViewer { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
 .terminalViewer summary { cursor:pointer; color:var(--sky); font-size:12px; font-weight:600; }

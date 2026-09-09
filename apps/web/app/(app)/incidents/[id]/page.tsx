@@ -484,22 +484,20 @@ export default function IncidentDetailPage() {
                           </button>
                         </div>
                         <p className="incidentSummary">{result.patch.summary}</p>
-                        {repoBaseUrl ? (
-                          <p className="incidentSummary">
-                            Copy the patch above, then{' '}
-                            <a href={`${repoBaseUrl}/edit/${branch}/${result.patch.file}`} target="_blank" rel="noreferrer">
-                              open {result.patch.file} in GitHub&apos;s editor
-                            </a>{' '}
-                            (on <code>{branch}</code>) and paste it in — this is a simplified, human-readable diff, not a{' '}
-                            <code>git apply</code>-ready patch, so it&apos;s meant to guide a manual edit, not be piped
-                            straight into git.
-                          </p>
-                        ) : (
-                          <p className="incidentSummary">
-                            Link a project above to get a direct link into this file on GitHub — for now, copy the patch and
-                            apply it manually; it&apos;s a simplified diff, not a <code>git apply</code>-ready patch.
-                          </p>
+                        {repoBaseUrl && (
+                          <a
+                            className="patchEditLink"
+                            href={`${repoBaseUrl}/edit/${branch}/${result.patch.file}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open in GitHub&apos;s editor (on {branch}) →
+                          </a>
                         )}
+                        <small className="patchNote">
+                          Simplified, human-readable diff — not a <code>git apply</code>-ready patch. Copy it, then paste it
+                          into the file {repoBaseUrl ? 'via the link above' : 'manually — link a project above for a direct link'}.
+                        </small>
                         <pre className="diffViewer">{result.patch.diff}</pre>
                       </div>
                     );
