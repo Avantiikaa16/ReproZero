@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { EmptyState } from '../empty-state';
+import { GettingStartedChecklist } from '../getting-started-checklist';
 
 type Incident = { id: string; title: string; status: string; priority: string | null; externalTicketKey: string | null; updatedAt: string };
 type Connection = { provider: string; status: string };
@@ -37,6 +38,7 @@ export default function OverviewPage() {
     return (
       <div className="appPage">
         <h1>Overview</h1>
+        <GettingStartedChecklist />
         <EmptyState
           title="No incidents yet"
           body="Create an incident or connect Jira and import a ticket to get started — this page will summarize open incidents, run activity, and integration health as they come in."
@@ -51,6 +53,7 @@ export default function OverviewPage() {
   return (
     <div className="appPage">
       <h1>Overview</h1>
+      <GettingStartedChecklist />
       <div className="overviewStats">
         <div className="overviewStat"><strong>{incidents.length}</strong><span>Total incidents</span></div>
         <div className="overviewStat"><strong>{open.length}</strong><span>Open</span></div>
