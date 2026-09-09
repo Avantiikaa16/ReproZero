@@ -13,7 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://reprozero-incidents.avantika1610.chatgpt.site'),
+  // Was pointing at a stale prototype-hosting domain from before this moved
+  // to Vercel — every relative OG/Twitter image URL below was resolving
+  // against the wrong host, which breaks the link-preview card wherever
+  // this gets shared (LinkedIn included). This is read at build time, so
+  // it must be the real production domain, not derived from a request.
+  metadataBase: new URL('https://reprozero.vercel.app'),
   title: 'ReproZero — Turn incidents into executable reproductions',
   description: 'Compile tickets, logs, and repository context into a running failure, then prove the repair.',
   openGraph: {
