@@ -17,7 +17,13 @@ const clerkAppearance = {
   variables: {
     colorPrimary: '#c8ff5c',
     colorBackground: '#182635',
-    colorInputBackground: '#071018',
+    // NOT colorInputBackground — that name doesn't exist in this Clerk
+    // version and was silently ignored, leaving input boxes on Clerk's
+    // default white background while colorInputForeground below still
+    // set the typed text to near-white: invisible white-on-white text.
+    // Verified by checking this version's actual token list rather than
+    // assuming the old name still worked.
+    colorInput: '#071018',
     // Both naming generations are set intentionally: this Clerk version's
     // typed token names (colorForeground/colorMutedForeground) coexist with
     // the older colorText/colorTextSecondary names some internals still
@@ -51,6 +57,8 @@ const clerkAppearance = {
       boxShadow: '0 35px 110px rgba(0,0,0,.36)',
     },
     footerActionLink: { color: '#63d9ff' },
+    // Belt-and-suspenders with colorInput/colorInputForeground above.
+    formFieldInput: { background: '#071018', color: '#eef4ff', borderColor: 'rgba(207,224,243,.16)' },
     // Belt-and-suspenders with colorPrimaryForeground above, in case this
     // Clerk version resolves one but not the other.
     formButtonPrimary: { color: '#0a120d' },
