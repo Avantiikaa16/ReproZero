@@ -19,7 +19,16 @@ export async function GET() {
       .from(integrationConnections)
       .where(eq(integrationConnections.organizationId, context.organizationId));
 
-    return Response.json({ connections });
+    // config.webhookToken is the shared secret that authenticates inbound
+    // Jira webhook calls (see jira-webhook.ts) — never send it to the
+    // browser, same rule as any other credential in this app.
+    const sanitized = connections.map((connection) => {
+      const config = { ...(connection.config as Record<string, unknown>) };
+      delete config.webhookToken;
+      return { ...connection, config };
+    });
+
+    return Response.json({ connections: sanitized });
   } catch (error) {
     const authError = authErrorResponse(error);
     if (authError) return authError;

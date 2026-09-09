@@ -4,6 +4,7 @@ import { incidents, integrationConnections, jiraTicketSnapshots } from '../../..
 import { recordAuditEvent } from '../../../../../../lib/audit';
 import { authErrorResponse, requireWorkspaceContext } from '../../../../../../lib/auth-context';
 import { getJiraTicketDetail } from '../../../../../../lib/jira-adapter';
+import { resyncJiraIncident } from '../../../../../../lib/jira-sync';
 
 export async function POST(_request: Request, { params }: { params: Promise<{ key: string }> }) {
   try {
@@ -20,7 +21,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ke
     }
 
     // Reimporting an already-linked ticket updates the existing incident
-    // with a fresh snapshot rather than creating a duplicate.
+    // with a fresh snapshot rather than creating a duplicate — the exact
+    // same "apply a sync" logic the webhook receiver uses, so a manual
+    // Resync and an automatic webhook-triggered sync never diverge.
     const [existing] = await db
       .select({ id: incidents.id })
       .from(incidents)
@@ -32,30 +35,32 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ke
         ),
       );
 
+    if (existing) {
+      const { incident, snapshot } = await resyncJiraIncident({
+        incidentId: existing.id,
+        connectionId: connection.id,
+        externalKey: key,
+        organizationId: context.organizationId,
+        actorId: context.userId,
+        action: 'incident.jira_resynced',
+      });
+      return Response.json({ incident, jiraSnapshot: snapshot }, { status: 200 });
+    }
+
     const detail = await getJiraTicketDetail(connection.id, key);
 
-    const incident = existing
-      ? (
-          await db
-            .update(incidents)
-            .set({ title: detail.summary, summary: detail.description.slice(0, 2000), updatedAt: new Date() })
-            .where(eq(incidents.id, existing.id))
-            .returning()
-        )[0]
-      : (
-          await db
-            .insert(incidents)
-            .values({
-              organizationId: context.organizationId,
-              title: detail.summary,
-              summary: detail.description.slice(0, 2000),
-              status: 'New',
-              integrationConnectionId: connection.id,
-              externalTicketKey: detail.key,
-              createdBy: context.userId,
-            })
-            .returning()
-        )[0];
+    const [incident] = await db
+      .insert(incidents)
+      .values({
+        organizationId: context.organizationId,
+        title: detail.summary,
+        summary: detail.description.slice(0, 2000),
+        status: 'New',
+        integrationConnectionId: connection.id,
+        externalTicketKey: detail.key,
+        createdBy: context.userId,
+      })
+      .returning();
 
     const [snapshot] = await db
       .insert(jiraTicketSnapshots)
@@ -80,13 +85,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ke
     await recordAuditEvent({
       organizationId: context.organizationId,
       actorId: context.userId,
-      action: existing ? 'incident.jira_resynced' : 'incident.imported_from_jira',
+      action: 'incident.imported_from_jira',
       resourceType: 'incident',
       resourceId: incident.id,
       metadata: { externalTicketKey: detail.key },
     });
 
-    return Response.json({ incident, jiraSnapshot: snapshot }, { status: existing ? 200 : 201 });
+    return Response.json({ incident, jiraSnapshot: snapshot }, { status: 201 });
   } catch (error) {
     const authError = authErrorResponse(error);
     if (authError) return authError;

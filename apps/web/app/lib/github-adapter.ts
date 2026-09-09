@@ -10,6 +10,9 @@ const API_BASE = 'https://api.github.com';
 // 'repo' is required to create branches and pull requests on private (and
 // public) repos on the user's behalf.
 const GITHUB_SCOPES = 'repo read:user';
+// Every outbound call to GitHub gets a hard timeout so a slow/hung upstream
+// can't leave a request (or a Vercel function) stuck indefinitely.
+const GITHUB_FETCH_TIMEOUT_MS = 10_000;
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -44,6 +47,7 @@ export async function exchangeGithubCode(code: string): Promise<TokenResponse> {
       code,
       redirect_uri: getGithubRedirectUri(),
     }),
+    signal: AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`GitHub token exchange failed: ${response.status} ${await response.text()}`);
   const payload = (await response.json()) as TokenResponse;
@@ -56,6 +60,7 @@ export type GithubUser = { login: string; id: number; avatarUrl: string };
 export async function getGithubUser(accessToken: string): Promise<GithubUser> {
   const response = await fetch(`${API_BASE}/user`, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json' },
+    signal: AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`Failed to fetch GitHub user: ${response.status}`);
   const payload = (await response.json()) as { login: string; id: number; avatar_url: string };
@@ -86,6 +91,7 @@ async function githubApiFetch(integrationConnectionId: string, path: string, ini
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
     },
     body: init?.body ? JSON.stringify(init.body) : undefined,
+    signal: AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS),
   });
 }
 

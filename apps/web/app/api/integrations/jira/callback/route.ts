@@ -4,7 +4,8 @@ import { db } from '../../../../../db/client';
 import { integrationConnections, integrationCredentials } from '../../../../../db/schema';
 import { recordAuditEvent } from '../../../../lib/audit';
 import { authErrorResponse, requireWorkspaceContext } from '../../../../lib/auth-context';
-import { exchangeJiraCode, getJiraAccessibleResources } from '../../../../lib/jira-adapter';
+import { exchangeJiraCode, getJiraAccessibleResources, registerJiraWebhooks } from '../../../../lib/jira-adapter';
+import { generateWebhookToken } from '../../../../lib/jira-webhook';
 import { encryptSecret } from '../../../../lib/secret-crypto';
 
 // NextResponse.redirect(), not Response.redirect() — the latter's headers
@@ -111,6 +112,35 @@ export async function GET(request: Request) {
       resourceId: connectionId,
       metadata: { provider: 'jira', siteName: site.name },
     });
+
+    // Best-effort real-time sync: registers a webhook so linked incidents
+    // pick up ticket changes automatically instead of only on manual
+    // Resync. Never allowed to fail the connection itself — some Atlassian
+    // apps/environments won't accept dynamic webhook registration (e.g. no
+    // publicly reachable callback URL in local dev), and the connection
+    // must stay fully usable via pull-based Resync either way.
+    try {
+      const webhookToken = generateWebhookToken();
+      const callbackUrl = new URL('/api/integrations/jira/webhook', request.url);
+      callbackUrl.searchParams.set('connectionId', connectionId);
+      callbackUrl.searchParams.set('token', webhookToken);
+
+      const webhookIds = await registerJiraWebhooks(connectionId, callbackUrl.toString());
+
+      await db
+        .update(integrationConnections)
+        .set({
+          config: { ...connectionValues.config, webhookToken, webhookIds, webhookRegisteredAt: new Date().toISOString(), syncMode: 'webhook' },
+          updatedAt: new Date(),
+        })
+        .where(eq(integrationConnections.id, connectionId));
+    } catch (error) {
+      console.error('Jira webhook registration failed; falling back to pull-based sync.', error);
+      await db
+        .update(integrationConnections)
+        .set({ config: { ...connectionValues.config, syncMode: 'polling' }, updatedAt: new Date() })
+        .where(eq(integrationConnections.id, connectionId));
+    }
 
     const response = redirectToIntegrations(request, 'connected=jira');
     response.cookies.set('jira_oauth_nonce', '', { httpOnly: true, maxAge: 0, path: '/' });

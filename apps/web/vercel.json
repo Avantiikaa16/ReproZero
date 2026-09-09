@@ -1,4 +1,7 @@
 {
   "framework": "nextjs",
-  "buildCommand": "npx next build"
+  "buildCommand": "npx next build",
+  "crons": [
+    { "path": "/api/cron/jira-webhook-refresh", "schedule": "0 6 * * *" }
+  ]
 }

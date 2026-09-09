@@ -8,7 +8,7 @@ type Connection = {
   provider: string;
   displayName: string;
   status: 'pending' | 'connected' | 'error' | 'disabled';
-  config: { siteUrl?: string; siteName?: string; login?: string };
+  config: { siteUrl?: string; siteName?: string; login?: string; syncMode?: 'webhook' | 'polling' };
   lastSyncedAt: string | null;
 };
 
@@ -108,6 +108,14 @@ function IntegrationsPageContent() {
               <p className="integrationCardMeta">
                 {jira.config.siteName ?? jira.config.siteUrl}
                 {jira.lastSyncedAt && ` · connected ${new Date(jira.lastSyncedAt).toLocaleDateString()}`}
+                {' · '}
+                {jira.config.syncMode === 'webhook' ? (
+                  <span title="Linked tickets update automatically when they change in Jira.">Real-time sync active</span>
+                ) : (
+                  <span title="This Jira app couldn't register a real-time webhook — use the Resync button on an incident to pull updates.">
+                    Pull-based sync (use Resync)
+                  </span>
+                )}
               </p>
             )}
             <div className="integrationCardActions">

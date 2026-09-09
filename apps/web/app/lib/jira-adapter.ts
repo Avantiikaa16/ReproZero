@@ -12,6 +12,9 @@ const ACCESSIBLE_RESOURCES_URL = 'https://api.atlassian.com/oauth/token/accessib
 // > Configure ("Create and manage issues") in the Atlassian app console, or
 // Atlassian will reject the grant even though it's requested here.
 const JIRA_SCOPES = 'read:jira-work read:jira-user write:jira-work offline_access';
+// Every outbound call to Atlassian gets a hard timeout so a slow/hung
+// upstream can't leave a request (or a Vercel function) stuck indefinitely.
+const JIRA_FETCH_TIMEOUT_MS = 10_000;
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -54,6 +57,7 @@ export async function exchangeJiraCode(code: string): Promise<TokenResponse> {
       code,
       redirect_uri: getJiraRedirectUri(),
     }),
+    signal: AbortSignal.timeout(JIRA_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`Jira token exchange failed: ${response.status} ${await response.text()}`);
   return response.json() as Promise<TokenResponse>;
@@ -69,6 +73,7 @@ async function refreshJiraToken(refreshToken: string): Promise<TokenResponse> {
       client_secret: requireEnv('JIRA_OAUTH_CLIENT_SECRET'),
       refresh_token: refreshToken,
     }),
+    signal: AbortSignal.timeout(JIRA_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`Jira token refresh failed: ${response.status} ${await response.text()}`);
   return response.json() as Promise<TokenResponse>;
@@ -79,6 +84,7 @@ export type JiraAccessibleResource = { id: string; url: string; name: string };
 export async function getJiraAccessibleResources(accessToken: string): Promise<JiraAccessibleResource[]> {
   const response = await fetch(ACCESSIBLE_RESOURCES_URL, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    signal: AbortSignal.timeout(JIRA_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`Failed to list accessible Jira sites: ${response.status}`);
   return response.json() as Promise<JiraAccessibleResource[]>;
@@ -146,6 +152,7 @@ async function jiraApiFetch(
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
     },
     body: init?.body ? JSON.stringify(init.body) : undefined,
+    signal: AbortSignal.timeout(JIRA_FETCH_TIMEOUT_MS),
   });
 }
 
@@ -359,4 +366,67 @@ export async function transitionJiraIssue(integrationConnectionId: string, key: 
     body: { transition: { id: transitionId } },
   });
   if (!response.ok) throw new Error(`Failed to transition Jira issue: ${response.status} ${await response.text()}`);
+}
+
+// --- Real-time sync (webhooks): registered best-effort on connect, never
+// required for the connection itself to work — pull-based Resync stays the
+// fallback if any of this fails. See app/lib/jira-webhook.ts for inbound
+// verification and app/lib/jira-sync.ts for the shared apply-a-sync logic.
+
+/**
+ * Registers a dynamic webhook (Jira Cloud's OAuth-app webhook REST API,
+ * distinct from the Connect-app "static" module) scoped broadly
+ * (`project is not EMPTY`) since we don't know ahead of time which
+ * projects a user will import tickets from — the webhook receiver itself
+ * filters down to issues actually linked to an incident. Requires only the
+ * `read:jira-work` scope already requested at connect time; no extra
+ * Atlassian console toggle needed (unlike write:jira-work).
+ */
+export async function registerJiraWebhooks(integrationConnectionId: string, callbackUrl: string): Promise<number[]> {
+  const response = await jiraApiFetch(integrationConnectionId, '/rest/api/3/webhook', {
+    method: 'POST',
+    body: {
+      url: callbackUrl,
+      webhooks: [
+        { events: ['jira:issue_updated', 'comment_created', 'comment_updated'], jqlFilter: 'project is not EMPTY' },
+      ],
+    },
+  });
+  if (!response.ok) throw new Error(`Failed to register Jira webhook: ${response.status} ${await response.text()}`);
+  const payload = (await response.json()) as {
+    webhookRegistrationResult: Array<{ createdWebhookId?: number; errors?: string[] }>;
+  };
+  const ids = payload.webhookRegistrationResult
+    .map((result) => result.createdWebhookId)
+    .filter((id): id is number => typeof id === 'number');
+  if (ids.length === 0) {
+    const errors = payload.webhookRegistrationResult.flatMap((result) => result.errors ?? []);
+    throw new Error(`Jira accepted the webhook request but registered none. ${errors.join('; ')}`);
+  }
+  return ids;
+}
+
+/** Called on disconnect, and safe to call with a stale/already-gone id (Jira just no-ops it). */
+export async function deleteJiraWebhooks(integrationConnectionId: string, webhookIds: number[]): Promise<void> {
+  if (webhookIds.length === 0) return;
+  const response = await jiraApiFetch(integrationConnectionId, '/rest/api/3/webhook', {
+    method: 'DELETE',
+    body: { webhookIds },
+  });
+  if (!response.ok) throw new Error(`Failed to delete Jira webhooks: ${response.status} ${await response.text()}`);
+}
+
+/**
+ * Atlassian's dynamic webhooks expire (~30 days) with no user-visible
+ * warning when they lapse — the cron route in
+ * app/api/cron/jira-webhook-refresh calls this well before that, for every
+ * connected Jira workspace.
+ */
+export async function refreshJiraWebhooks(integrationConnectionId: string, webhookIds: number[]): Promise<void> {
+  if (webhookIds.length === 0) return;
+  const response = await jiraApiFetch(integrationConnectionId, '/rest/api/3/webhook/refresh', {
+    method: 'PUT',
+    body: { webhookIds },
+  });
+  if (!response.ok) throw new Error(`Failed to refresh Jira webhooks: ${response.status} ${await response.text()}`);
 }
