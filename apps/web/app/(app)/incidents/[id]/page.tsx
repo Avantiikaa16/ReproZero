@@ -18,6 +18,7 @@ type Incident = {
   assigneeId: string | null;
   externalTicketKey: string | null;
   reopenedCount: number;
+  repository: string | null;
 };
 
 type JiraSnapshot = {
@@ -40,6 +41,17 @@ type JiraTransition = { id: string; name: string; to: string };
 type PendingWriteback =
   | { action: 'comment'; body: string }
   | { action: 'transition'; transitionId: string; transitionName: string };
+type PendingGithubAction =
+  | { action: 'create_branch'; branchName: string; baseBranch: string }
+  | { action: 'create_pr'; head: string; base: string; title: string; body: string };
+type RunResult = {
+  verdict?: string;
+  error?: string;
+  codePath?: string[];
+  patch?: { file: string; summary: string; diff: string };
+  verification?: { before: { state: string; testsPassing: number }; after: { state: string; testsPassing: number }; totalTests: number };
+  terminalOutput?: string;
+};
 type SimilarMemory = {
   id: string;
   title: string;
@@ -64,6 +76,15 @@ export default function IncidentDetailPage() {
   const [pendingWriteback, setPendingWriteback] = useState<PendingWriteback | null>(null);
   const [writebackError, setWritebackError] = useState<string | null>(null);
   const [similarMemories, setSimilarMemories] = useState<SimilarMemory[]>([]);
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [branchNameDraft, setBranchNameDraft] = useState('');
+  const [prTitleDraft, setPrTitleDraft] = useState('');
+  const [prBodyDraft, setPrBodyDraft] = useState('');
+  const [prHeadDraft, setPrHeadDraft] = useState('');
+  const [pendingGithubAction, setPendingGithubAction] = useState<PendingGithubAction | null>(null);
+  const [githubActionError, setGithubActionError] = useState<string | null>(null);
+  const [githubActionResultUrl, setGithubActionResultUrl] = useState<string | null>(null);
+  const [patchCopied, setPatchCopied] = useState(false);
 
   const load = () => {
     fetch(`/api/incidents/${params.id}`)
@@ -94,6 +115,10 @@ export default function IncidentDetailPage() {
       .then(async (response) => (await response.json()) as { members: Member[] })
       .then((payload) => setMembers(payload.members))
       .catch(() => setMembers([]));
+    fetch('/api/integrations')
+      .then(async (response) => (await response.json()) as { connections: Array<{ provider: string; status: string }> })
+      .then((payload) => setGithubConnected(payload.connections.some((c) => c.provider === 'github' && c.status === 'connected')))
+      .catch(() => setGithubConnected(false));
   }, []);
 
   useEffect(() => {
@@ -190,6 +215,39 @@ export default function IncidentDetailPage() {
     }
   };
 
+  const confirmGithubAction = async () => {
+    if (!pendingGithubAction) return;
+    setBusy(true);
+    setGithubActionError(null);
+    setGithubActionResultUrl(null);
+    try {
+      const response = await fetch(`/api/incidents/${params.id}/github-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...pendingGithubAction, confirmed: true }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string; url?: string };
+      if (!response.ok) throw new Error(payload.error ?? 'GitHub action failed.');
+      setGithubActionResultUrl(payload.url ?? null);
+      setPendingGithubAction(null);
+      setBranchNameDraft('');
+      setPrTitleDraft('');
+      setPrBodyDraft('');
+      setPrHeadDraft('');
+      load();
+    } catch (error) {
+      setGithubActionError(error instanceof Error ? error.message : 'GitHub action failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyPatch = async (diff: string) => {
+    await navigator.clipboard.writeText(diff);
+    setPatchCopied(true);
+    setTimeout(() => setPatchCopied(false), 1800);
+  };
+
   if (incident === null) {
     return (
       <div className="appPage">
@@ -239,6 +297,16 @@ export default function IncidentDetailPage() {
             <button className="primaryButtonSmall" disabled={busy} onClick={() => updateIncident({ status: 'Completed' })}>Mark completed</button>
           )}
           <a className="secondaryButton" href={`/api/incidents/${params.id}/evidence-bundle`}>Download evidence bundle</a>
+          {incident.repository && (
+            <a
+              className="secondaryButton"
+              href={incident.repository.startsWith('http') ? incident.repository : `https://github.com/${incident.repository}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open repository
+            </a>
+          )}
         </div>
 
         {latestRun && (
@@ -252,23 +320,62 @@ export default function IncidentDetailPage() {
             {latestRun.status === 'failed' && typeof latestRun.result.error === 'string' && (
               <p className="runSummaryError">{latestRun.result.error}</p>
             )}
-            {latestRun.status === 'succeeded' && (
-              <>
-                <p className="runSummaryError" style={{ color: '#8fe28f' }}>
-                  Verdict: {String((latestRun.result as { verdict?: string }).verdict ?? 'FIX_VERIFIED')} — see Reproductions for full evidence.
-                </p>
-                {Array.isArray((latestRun.result as { codePath?: string[] }).codePath) && (
-                  <div className="codePathGraph">
-                    {((latestRun.result as { codePath: string[] }).codePath).map((entry, index, all) => (
-                      <div key={entry} className="codePathNode">
-                        <span>{entry}</span>
-                        {index < all.length - 1 && <i>↓</i>}
+            {latestRun.status === 'succeeded' && (() => {
+              const result = latestRun.result as RunResult;
+              return (
+                <>
+                  <p className="runSummaryError" style={{ color: '#8fe28f' }}>
+                    Verdict: {result.verdict ?? 'FIX_VERIFIED'} — see Reproductions for full evidence.
+                  </p>
+                  {Array.isArray(result.codePath) && (
+                    <div className="codePathGraph">
+                      {result.codePath.map((entry, index, all) => (
+                        <div key={entry} className="codePathNode">
+                          <span>{entry}</span>
+                          {index < all.length - 1 && <i>↓</i>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {result.verification && (
+                    <div className="beforeAfterCompare">
+                      <div>
+                        <small>Before</small>
+                        <strong>{result.verification.before.state}</strong>
+                        <span>{result.verification.before.testsPassing}/{result.verification.totalTests} tests passing</span>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+                      <i>→</i>
+                      <div>
+                        <small>After</small>
+                        <strong>{result.verification.after.state}</strong>
+                        <span>{result.verification.after.testsPassing}/{result.verification.totalTests} tests passing</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {result.patch && (
+                    <div className="patchViewer">
+                      <div className="patchViewerHead">
+                        <span>{result.patch.file}</span>
+                        <button className="textLinkButton" onClick={() => copyPatch(result.patch!.diff)}>
+                          {patchCopied ? '✓ Copied' : 'Copy patch'}
+                        </button>
+                      </div>
+                      <p className="incidentSummary">{result.patch.summary}</p>
+                      <pre className="diffViewer">{result.patch.diff}</pre>
+                    </div>
+                  )}
+
+                  {result.terminalOutput && (
+                    <details className="terminalViewer">
+                      <summary>Terminal output (real sandbox)</summary>
+                      <pre>{result.terminalOutput}</pre>
+                    </details>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -285,6 +392,83 @@ export default function IncidentDetailPage() {
                 {memory.incidentId && <Link href={`/incidents/${memory.incidentId}`} className="textLinkButton">View →</Link>}
               </div>
             ))}
+          </div>
+        )}
+
+        {incident.repository && (
+          <div className="githubActions">
+            <h2>GitHub</h2>
+            {!githubConnected ? (
+              <p className="incidentSummary">
+                GitHub isn&apos;t connected for this workspace. <Link href="/integrations">Connect it</Link> to create branches or open pull requests.
+              </p>
+            ) : (
+              <>
+                <div className="githubActionRow">
+                  <input
+                    placeholder="New branch name, e.g. fix/dit-1842"
+                    value={branchNameDraft}
+                    onChange={(event) => setBranchNameDraft(event.target.value)}
+                  />
+                  <button
+                    className="secondaryButton"
+                    disabled={busy || !branchNameDraft.trim()}
+                    onClick={() => setPendingGithubAction({ action: 'create_branch', branchName: branchNameDraft.trim(), baseBranch: 'main' })}
+                  >
+                    Preview branch creation
+                  </button>
+                </div>
+                <div className="githubActionRow githubPrRow">
+                  <input placeholder="Head branch (must already exist)" value={prHeadDraft} onChange={(event) => setPrHeadDraft(event.target.value)} />
+                  <input placeholder="PR title" value={prTitleDraft} onChange={(event) => setPrTitleDraft(event.target.value)} />
+                </div>
+                <textarea
+                  rows={2}
+                  placeholder="PR description (optional)"
+                  value={prBodyDraft}
+                  onChange={(event) => setPrBodyDraft(event.target.value)}
+                />
+                <button
+                  className="secondaryButton"
+                  disabled={busy || !prHeadDraft.trim() || !prTitleDraft.trim()}
+                  onClick={() => setPendingGithubAction({ action: 'create_pr', head: prHeadDraft.trim(), base: 'main', title: prTitleDraft.trim(), body: prBodyDraft })}
+                >
+                  Preview draft pull request
+                </button>
+              </>
+            )}
+            {githubActionResultUrl && (
+              <p className="runSummaryError" style={{ color: '#8fe28f' }}>
+                Done — <a href={githubActionResultUrl} target="_blank" rel="noreferrer">view on GitHub →</a>
+              </p>
+            )}
+          </div>
+        )}
+
+        {pendingGithubAction && (
+          <div className="writebackConfirm">
+            <strong>Confirm GitHub write</strong>
+            {pendingGithubAction.action === 'create_branch' ? (
+              <p>
+                Create branch <b>{pendingGithubAction.branchName}</b> from <b>{pendingGithubAction.baseBranch}</b> on{' '}
+                <b>{incident.repository}</b>. This only creates the branch pointer — no files change until you push a commit to it.
+              </p>
+            ) : (
+              <p>
+                Open a <b>draft</b> pull request on <b>{incident.repository}</b>: <b>{pendingGithubAction.head}</b> →{' '}
+                <b>{pendingGithubAction.base}</b>, titled &ldquo;{pendingGithubAction.title}&rdquo;. This compares whatever commits
+                already exist on <b>{pendingGithubAction.head}</b> — it doesn&apos;t push the patch for you.
+              </p>
+            )}
+            {githubActionError && <p className="runSummaryError">{githubActionError}</p>}
+            <div className="incidentActionRow">
+              <button className="secondaryButton" disabled={busy} onClick={() => { setPendingGithubAction(null); setGithubActionError(null); }}>
+                Cancel
+              </button>
+              <button className="primaryButtonSmall" disabled={busy} onClick={confirmGithubAction}>
+                Confirm &amp; write to GitHub
+              </button>
+            </div>
           </div>
         )}
 

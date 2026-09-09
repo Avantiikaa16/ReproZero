@@ -253,6 +253,7 @@ h1 em { display:block; color:var(--acid); font-style:normal; }
 .integrationCardHead strong { font-size:15px; }
 .integrationCardHead small { color:var(--muted); font-size:12px; line-height:1.5; }
 .jiraBadge.grey { background:#3a4656; }
+.jiraBadge.github { background:#1a1f24; border:1px solid rgba(255,255,255,.12); }
 .integrationCardMeta { margin:2px 0 0; color:var(--muted); font-size:12px; }
 .integrationCardActions { margin-top:14px; display:flex; gap:10px; }
 
@@ -358,6 +359,31 @@ h1 em { display:block; color:var(--acid); font-style:normal; }
 .codePathNode { display:flex; flex-direction:column; align-items:flex-start; }
 .codePathNode span { padding:6px 10px; border:1px solid rgba(99,217,255,.25); border-radius:8px; background:rgba(99,217,255,.05); color:#8fcbdc; font:11px/1.4 var(--font-geist-mono); }
 .codePathNode i { padding-left:16px; color:var(--muted); font-style:normal; font-size:11px; }
+
+.beforeAfterCompare { display:flex; align-items:center; gap:16px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+.beforeAfterCompare > div { display:flex; flex-direction:column; gap:3px; }
+.beforeAfterCompare small { color:var(--muted); font:650 9px/1 var(--font-geist-mono); text-transform:uppercase; letter-spacing:.05em; }
+.beforeAfterCompare strong { font-size:14px; }
+.beforeAfterCompare span { color:var(--muted); font-size:11px; }
+.beforeAfterCompare i { font-style:normal; color:var(--acid); font-size:16px; }
+
+.patchViewer { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+.patchViewerHead { display:flex; align-items:center; justify-content:space-between; }
+.patchViewerHead span { font:11px/1 var(--font-geist-mono); color:#dce7f3; }
+.diffViewer { margin:8px 0 0; padding:12px; border:1px solid var(--line); border-radius:10px; background:rgba(4,13,20,.62); color:#a7d8c8; font:11px/1.6 var(--font-geist-mono); overflow-x:auto; white-space:pre; }
+
+.terminalViewer { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+.terminalViewer summary { cursor:pointer; color:var(--sky); font-size:12px; font-weight:600; }
+.terminalViewer pre { margin:8px 0 0; padding:12px; border:1px solid var(--line); border-radius:10px; background:#04080c; color:#8fcbdc; font:10px/1.6 var(--font-geist-mono); overflow-x:auto; white-space:pre-wrap; max-height:320px; overflow-y:auto; }
+
+.githubActions { display:flex; flex-direction:column; gap:10px; }
+.githubActions h2 { margin:0; font-size:15px; }
+.githubActionRow { display:flex; gap:8px; }
+.githubActionRow input { flex:1; padding:9px 11px; border:1px solid var(--line); border-radius:9px; background:rgba(4,13,20,.62); color:var(--ink); font-size:12px; }
+.githubActionRow input::placeholder { color:#465565; }
+.githubPrRow input:first-child { flex:.7; }
+.githubActions textarea { padding:9px 11px; border:1px solid var(--line); border-radius:9px; background:rgba(4,13,20,.62); color:var(--ink); font:12px/1.5 var(--font-geist-sans); resize:vertical; }
+.githubActions textarea::placeholder { color:#465565; }
 
 .incidentNotes { display:flex; flex-direction:column; gap:12px; }
 .incidentNotes h2 { margin:0; font-size:15px; }

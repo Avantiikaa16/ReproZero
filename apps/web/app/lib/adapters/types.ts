@@ -44,6 +44,10 @@ export type ReproductionResult = {
     totalTests: number;
   };
   memory: { key: string; lesson: string; confidence: number; status: 'stored' };
+  // Real captured stdout from a live sandbox run (install/test/verify).
+  // Undefined for demo-simulation runs — there's no real terminal to show,
+  // and the UI must not fabricate one.
+  terminalOutput?: string;
   analysis?: import('../live-integrations').IncidentAnalysis;
   greptile?: import('../live-integrations').GreptileRepositoryStatus;
   claudeMemory?: import('../live-integrations').ClaudeMemoryResult;

@@ -1,0 +1,42 @@
+import { and, eq } from 'drizzle-orm';
+import { db } from '../../../../../db/client';
+import { integrationConnections, integrationCredentials } from '../../../../../db/schema';
+import { recordAuditEvent } from '../../../../lib/audit';
+import { authErrorResponse, requireWorkspaceContext } from '../../../../lib/auth-context';
+
+export async function POST() {
+  try {
+    const context = await requireWorkspaceContext();
+
+    const [connection] = await db
+      .select()
+      .from(integrationConnections)
+      .where(and(eq(integrationConnections.organizationId, context.organizationId), eq(integrationConnections.provider, 'github')));
+
+    if (!connection) {
+      return Response.json({ error: 'GitHub is not connected.' }, { status: 404 });
+    }
+
+    await db.delete(integrationCredentials).where(eq(integrationCredentials.integrationConnectionId, connection.id));
+    await db
+      .update(integrationConnections)
+      .set({ status: 'disabled', updatedAt: new Date() })
+      .where(eq(integrationConnections.id, connection.id));
+
+    await recordAuditEvent({
+      organizationId: context.organizationId,
+      actorId: context.userId,
+      action: 'integration.disconnected',
+      resourceType: 'integration_connection',
+      resourceId: connection.id,
+      metadata: { provider: 'github' },
+    });
+
+    return Response.json({ status: 'disconnected' });
+  } catch (error) {
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    console.error('Failed to disconnect GitHub.', error);
+    return Response.json({ error: 'Failed to disconnect GitHub.' }, { status: 500 });
+  }
+}

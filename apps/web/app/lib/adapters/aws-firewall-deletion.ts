@@ -95,5 +95,8 @@ export function buildLiveAwsResult(live: LiveAwsVerification): ReproductionResul
       totalTests: live.totalTests,
     },
     integrations: { ...base.integrations, aws: 'live_sandbox' },
+    terminalOutput: [
+      '$ npm install', '$ npm test', live.rawTestOutput.trim(), '$ npm run verify', live.rawVerifyOutput.trim(),
+    ].join('\n\n'),
   };
 }
