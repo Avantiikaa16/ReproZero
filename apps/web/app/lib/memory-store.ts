@@ -33,7 +33,7 @@ export async function storeMemoryReference(input: {
 
 const STOPWORDS = new Set(['this', 'that', 'with', 'from', 'have', 'were', 'been', 'when', 'while', 'incident']);
 
-function tokenize(text: string): Set<string> {
+export function tokenize(text: string): Set<string> {
   return new Set(
     text
       .toLowerCase()
@@ -52,25 +52,29 @@ export type SimilarMemory = {
   sharedTerms: string[];
 };
 
+export type MemoryCandidate = {
+  id: string;
+  title: string;
+  rootCause: string | null;
+  verifiedRepair: string | null;
+  confidence: number | null;
+  incidentId: string | null;
+};
+
 /**
  * Deliberately simple keyword-overlap matching, not embeddings — but every
  * match comes with the exact terms that matched, so the "similarity
  * explanation" Phase 7 calls for is always concrete, never a black box.
+ * Pulled apart from the DB fetch below purely so this scoring logic is
+ * unit-testable without a live database (see test/memory-store.test.ts).
  */
-export async function findSimilarMemories(
-  organizationId: string,
+export function scoreMemoryCandidates(
   queryText: string,
+  candidates: MemoryCandidate[],
   excludeIncidentId?: string,
-): Promise<SimilarMemory[]> {
+): SimilarMemory[] {
   const queryTerms = tokenize(queryText);
   if (queryTerms.size === 0) return [];
-
-  const candidates = await db
-    .select()
-    .from(memoryReferences)
-    .where(eq(memoryReferences.organizationId, organizationId))
-    .orderBy(desc(memoryReferences.createdAt))
-    .limit(200);
 
   const scored = candidates
     .filter((candidate) => candidate.incidentId !== excludeIncidentId)
@@ -92,4 +96,23 @@ export async function findSimilarMemories(
     incidentId: candidate.incidentId,
     sharedTerms,
   }));
+}
+
+export async function findSimilarMemories(
+  organizationId: string,
+  queryText: string,
+  excludeIncidentId?: string,
+): Promise<SimilarMemory[]> {
+  // Cheap early exit before the DB round-trip below — an all-stopword or
+  // empty query can never match anything scoreMemoryCandidates would keep.
+  if (tokenize(queryText).size === 0) return [];
+
+  const candidates = await db
+    .select()
+    .from(memoryReferences)
+    .where(eq(memoryReferences.organizationId, organizationId))
+    .orderBy(desc(memoryReferences.createdAt))
+    .limit(200);
+
+  return scoreMemoryCandidates(queryText, candidates, excludeIncidentId);
 }
