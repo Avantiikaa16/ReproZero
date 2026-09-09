@@ -69,7 +69,21 @@ export function GettingStartedChecklist() {
   ];
   const allDone = steps.every((step) => step.done);
 
-  if (!loaded || dismissed || allDone) return null;
+  if (!loaded || dismissed) return null;
+
+  // Rendering nothing at all here used to be indistinguishable from the
+  // checklist never having existed — confusing for anyone (including you)
+  // checking whether it's actually built. A workspace that already has a
+  // connection, an incident, and a run completed every step; leaving a
+  // small confirmation instead of vanishing entirely makes that legible.
+  if (allDone) {
+    return (
+      <div className="gettingStartedCard gettingStartedDone">
+        <span>✓ Getting started — all set.</span>
+        <button className="textLinkButton" onClick={dismiss} aria-label="Dismiss getting started checklist">Dismiss</button>
+      </div>
+    );
+  }
 
   return (
     <div className="gettingStartedCard">
