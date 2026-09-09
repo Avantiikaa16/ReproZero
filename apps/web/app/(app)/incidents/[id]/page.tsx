@@ -19,6 +19,7 @@ type Incident = {
   externalTicketKey: string | null;
   reopenedCount: number;
   repository: string | null;
+  projectId: string | null;
 };
 
 type JiraSnapshot = {
@@ -87,6 +88,9 @@ export default function IncidentDetailPage() {
   const [githubActionResultUrl, setGithubActionResultUrl] = useState<string | null>(null);
   const [patchCopied, setPatchCopied] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [projectPickerValue, setProjectPickerValue] = useState('');
 
   const load = () => {
     fetch(`/api/incidents/${params.id}`)
@@ -123,6 +127,10 @@ export default function IncidentDetailPage() {
       .then(async (response) => (await response.json()) as { connections: Array<{ provider: string; status: string }> })
       .then((payload) => setGithubConnected(payload.connections.some((c) => c.provider === 'github' && c.status === 'connected')))
       .catch(() => setGithubConnected(false));
+    fetch('/api/projects')
+      .then(async (response) => (await response.json()) as { projects: Project[] })
+      .then((payload) => setAllProjects(payload.projects))
+      .catch(() => setAllProjects([]));
   }, []);
 
   useEffect(() => {
@@ -244,6 +252,11 @@ export default function IncidentDetailPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const linkProject = async () => {
+    await updateIncident({ projectId: projectPickerValue || null });
+    setShowProjectPicker(false);
   };
 
   const copyPatch = async (diff: string) => {
@@ -399,55 +412,94 @@ export default function IncidentDetailPage() {
           </div>
         )}
 
-        {incident.repository && (
-          <div className="githubActions">
-            <h2>GitHub</h2>
-            {!githubConnected ? (
-              <p className="incidentSummary">
-                GitHub isn&apos;t connected for this workspace. <Link href="/integrations">Connect it</Link> to create branches or open pull requests.
-              </p>
-            ) : (
-              <>
-                <div className="githubActionRow">
-                  <input
-                    placeholder="New branch name, e.g. fix/dit-1842"
-                    value={branchNameDraft}
-                    onChange={(event) => setBranchNameDraft(event.target.value)}
+        <div className="githubActions">
+          <h2>Repository</h2>
+          {incident.repository ? (
+            <p className="incidentSummary">
+              Linked to <b>{project?.name ?? incident.repository}</b>{project && ` — ${project.repository}`}.{' '}
+              <button className="textLinkButton" onClick={() => { setProjectPickerValue(incident.projectId ?? ''); setShowProjectPicker((v) => !v); }}>
+                Change
+              </button>
+            </p>
+          ) : (
+            <p className="incidentSummary">
+              No repository linked yet — link a project to enable GitHub branch/PR actions.{' '}
+              <button className="textLinkButton" onClick={() => { setProjectPickerValue(''); setShowProjectPicker((v) => !v); }}>
+                Link a project
+              </button>
+            </p>
+          )}
+
+          {showProjectPicker && (
+            <div className="githubActionRow">
+              {allProjects.length === 0 ? (
+                <p className="incidentSummary">
+                  No projects in this workspace yet. <Link href="/settings">Create one in Settings</Link>, then come back here.
+                </p>
+              ) : (
+                <>
+                  <select value={projectPickerValue} onChange={(event) => setProjectPickerValue(event.target.value)}>
+                    <option value="">No project (unlink)</option>
+                    {allProjects.map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>{candidate.name} — {candidate.repository}</option>
+                    ))}
+                  </select>
+                  <button className="primaryButtonSmall" disabled={busy} onClick={linkProject}>Save</button>
+                </>
+              )}
+              <button className="secondaryButton" disabled={busy} onClick={() => setShowProjectPicker(false)}>Cancel</button>
+            </div>
+          )}
+
+          {incident.repository && (
+            <>
+              {!githubConnected ? (
+                <p className="incidentSummary">
+                  GitHub isn&apos;t connected for this workspace. <Link href="/integrations">Connect it</Link> to create branches or open pull requests.
+                </p>
+              ) : (
+                <>
+                  <div className="githubActionRow">
+                    <input
+                      placeholder="New branch name, e.g. fix/dit-1842"
+                      value={branchNameDraft}
+                      onChange={(event) => setBranchNameDraft(event.target.value)}
+                    />
+                    <button
+                      className="secondaryButton"
+                      disabled={busy || !branchNameDraft.trim()}
+                      onClick={() => setPendingGithubAction({ action: 'create_branch', branchName: branchNameDraft.trim(), baseBranch: project?.defaultBranch ?? 'main' })}
+                    >
+                      Preview branch creation
+                    </button>
+                  </div>
+                  <div className="githubActionRow githubPrRow">
+                    <input placeholder="Head branch (must already exist)" value={prHeadDraft} onChange={(event) => setPrHeadDraft(event.target.value)} />
+                    <input placeholder="PR title" value={prTitleDraft} onChange={(event) => setPrTitleDraft(event.target.value)} />
+                  </div>
+                  <textarea
+                    rows={2}
+                    placeholder="PR description (optional)"
+                    value={prBodyDraft}
+                    onChange={(event) => setPrBodyDraft(event.target.value)}
                   />
                   <button
                     className="secondaryButton"
-                    disabled={busy || !branchNameDraft.trim()}
-                    onClick={() => setPendingGithubAction({ action: 'create_branch', branchName: branchNameDraft.trim(), baseBranch: project?.defaultBranch ?? 'main' })}
+                    disabled={busy || !prHeadDraft.trim() || !prTitleDraft.trim()}
+                    onClick={() => setPendingGithubAction({ action: 'create_pr', head: prHeadDraft.trim(), base: project?.defaultBranch ?? 'main', title: prTitleDraft.trim(), body: prBodyDraft })}
                   >
-                    Preview branch creation
+                    Preview draft pull request
                   </button>
-                </div>
-                <div className="githubActionRow githubPrRow">
-                  <input placeholder="Head branch (must already exist)" value={prHeadDraft} onChange={(event) => setPrHeadDraft(event.target.value)} />
-                  <input placeholder="PR title" value={prTitleDraft} onChange={(event) => setPrTitleDraft(event.target.value)} />
-                </div>
-                <textarea
-                  rows={2}
-                  placeholder="PR description (optional)"
-                  value={prBodyDraft}
-                  onChange={(event) => setPrBodyDraft(event.target.value)}
-                />
-                <button
-                  className="secondaryButton"
-                  disabled={busy || !prHeadDraft.trim() || !prTitleDraft.trim()}
-                  onClick={() => setPendingGithubAction({ action: 'create_pr', head: prHeadDraft.trim(), base: project?.defaultBranch ?? 'main', title: prTitleDraft.trim(), body: prBodyDraft })}
-                >
-                  Preview draft pull request
-                </button>
-              </>
-            )}
-            {githubActionResultUrl && (
-              <p className="runSummaryError" style={{ color: '#8fe28f' }}>
-                Done — <a href={githubActionResultUrl} target="_blank" rel="noreferrer">view on GitHub →</a>
-              </p>
-            )}
-          </div>
-        )}
+                </>
+              )}
+              {githubActionResultUrl && (
+                <p className="runSummaryError" style={{ color: '#8fe28f' }}>
+                  Done — <a href={githubActionResultUrl} target="_blank" rel="noreferrer">view on GitHub →</a>
+                </p>
+              )}
+            </>
+          )}
+        </div>
 
         {pendingGithubAction && (
           <div className="writebackConfirm">

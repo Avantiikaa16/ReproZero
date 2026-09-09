@@ -53,6 +53,13 @@ const updateIncidentSchema = z.object({
   // 'me' is resolved to the caller's own user id server-side below — the
   // client has no reliable way to know its own internal DB user id.
   assigneeId: z.union([z.string().uuid(), z.literal('me')]).nullable().optional(),
+  // Links (or, passed as null, unlinks) a project after creation — the
+  // only way to attach a repository to an incident that was created
+  // without one, e.g. every Jira-imported incident (import never sets
+  // this) or an older manually-created one. Mirrors the create-time
+  // logic in POST /api/incidents: the project's own repository is always
+  // the source of truth once linked.
+  projectId: z.string().uuid().nullable().optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -109,6 +116,29 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         content: parsed.data.assigneeId ? 'Incident assigned' : 'Incident unassigned',
         metadata: { assigneeId: parsed.data.assigneeId },
       });
+    }
+    if (parsed.data.projectId !== undefined && parsed.data.projectId !== incident.projectId) {
+      if (parsed.data.projectId === null) {
+        updates.projectId = null;
+        updates.repository = null;
+        timelineNotes.push({ type: 'system', content: 'Repository unlinked', metadata: {} });
+      } else {
+        const [linkedProject] = await db
+          .select({ id: projects.id, name: projects.name, repository: projects.repository })
+          .from(projects)
+          .where(and(eq(projects.id, parsed.data.projectId), eq(projects.organizationId, context.organizationId)));
+        if (!linkedProject) return Response.json({ error: 'Project not found.' }, { status: 400 });
+        updates.projectId = linkedProject.id;
+        // The linked project's repo is the source of truth once set — same
+        // rule as incident creation, so the plain-text display and GitHub
+        // actions never disagree with the project record.
+        updates.repository = linkedProject.repository;
+        timelineNotes.push({
+          type: 'system',
+          content: `Linked to project "${linkedProject.name}" (${linkedProject.repository})`,
+          metadata: { projectId: linkedProject.id },
+        });
+      }
     }
 
     const [updated] = await db.update(incidents).set(updates).where(eq(incidents.id, id)).returning();
