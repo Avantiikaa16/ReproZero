@@ -447,6 +447,8 @@ h1 em { display:block; color:var(--acid); font-style:normal; }
 .showcasePage h1 { margin:6px 0 0; font-size:28px; letter-spacing:-.02em; }
 .showcaseEyebrow { margin:0; color:var(--sky); font:600 11px/1 var(--font-geist-mono); text-transform:uppercase; letter-spacing:.06em; }
 .showcaseMeta { display:flex; flex-wrap:wrap; gap:9px; align-items:center; color:var(--muted); font-size:12px; }
+.showcaseMeta a { color:var(--sky); font:11px/1 var(--font-geist-mono); }
+.showcaseMeta a:hover { color:white; }
 .showcaseFooterCta { margin-top:10px; padding:20px; border:1px solid var(--line); border-radius:14px; background:rgba(200,255,92,.04); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; }
 .showcaseFooterCta p { margin:0; max-width:440px; color:var(--muted); font-size:13px; line-height:1.6; }
 

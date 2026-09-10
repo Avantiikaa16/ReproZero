@@ -1,6 +1,6 @@
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../../../db/client';
-import { incidentNotes, incidents, reproductionRuns } from '../../../../db/schema';
+import { incidentNotes, incidents, projects, reproductionRuns } from '../../../../db/schema';
 
 /**
  * Public, unauthenticated, read-only — deliberately excluded from
@@ -40,6 +40,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     .orderBy(desc(reproductionRuns.createdAt))
     .limit(1);
 
+  // Only the branch name — used to build a "view this file on GitHub" link
+  // on the public page. Nothing else about the project is exposed.
+  let defaultBranch = 'main';
+  if (incident.projectId) {
+    const [linkedProject] = await db.select({ defaultBranch: projects.defaultBranch }).from(projects).where(eq(projects.id, incident.projectId));
+    if (linkedProject?.defaultBranch) defaultBranch = linkedProject.defaultBranch;
+  }
+
   return Response.json(
     {
       incident: {
@@ -48,6 +56,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
         status: incident.status,
         priority: incident.priority,
         repository: incident.repository,
+        defaultBranch,
         reopenedCount: incident.reopenedCount,
         createdAt: incident.createdAt,
       },

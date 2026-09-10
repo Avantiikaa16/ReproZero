@@ -23,9 +23,16 @@ type ShowcaseIncident = {
   status: string;
   priority: string | null;
   repository: string | null;
+  defaultBranch: string;
   reopenedCount: number;
   createdAt: string;
 };
+
+/** "owner/repo" or a full URL → a clean https://github.com/... base, or null. */
+function repoUrl(repository: string | null): string | null {
+  if (!repository) return null;
+  return repository.startsWith('http') ? repository.replace(/\.git$/, '') : `https://github.com/${repository}`;
+}
 
 export function ShowcaseClient({ slug }: { slug: string }) {
   const [data, setData] = useState<{ incident: ShowcaseIncident; notes: ShowcaseNote[]; latestRun: ShowcaseRun | null } | 'not_found' | null>(null);
@@ -72,7 +79,14 @@ export function ShowcaseClient({ slug }: { slug: string }) {
             <div className="showcaseMeta">
               <span className="appStatusPill live">{data.incident.status}</span>
               {data.incident.priority && <span className="appStatusPill demo">{data.incident.priority}</span>}
-              {data.incident.repository && <span>{data.incident.repository}</span>}
+              {data.incident.repository &&
+                (repoUrl(data.incident.repository) ? (
+                  <a href={repoUrl(data.incident.repository)!} target="_blank" rel="noreferrer">
+                    {data.incident.repository} →
+                  </a>
+                ) : (
+                  <span>{data.incident.repository}</span>
+                ))}
               {data.incident.reopenedCount > 0 && <span>Reopened {data.incident.reopenedCount}×</span>}
             </div>
 
@@ -121,6 +135,16 @@ export function ShowcaseClient({ slug }: { slug: string }) {
                       <div className="patchViewer">
                         <div className="patchViewerHead"><span>{data.latestRun.result.patch.file}</span></div>
                         <p className="incidentSummary">{data.latestRun.result.patch.summary}</p>
+                        {repoUrl(data.incident.repository) && (
+                          <a
+                            className="patchEditLink"
+                            href={`${repoUrl(data.incident.repository)}/blob/${data.incident.defaultBranch}/${data.latestRun.result.patch.file}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View {data.latestRun.result.patch.file} on GitHub →
+                          </a>
+                        )}
                         <pre className="diffViewer">{data.latestRun.result.patch.diff}</pre>
                       </div>
                     )}
