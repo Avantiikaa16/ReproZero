@@ -2,265 +2,223 @@
 
 > **Tickets describe failures. ReproZero makes them run.**
 
-[Live demo](https://reprozero.vercel.app/) · [Executable AWS demo repository](https://github.com/Avantiikaa16/ReproZero_AWS_Demo)
+[Live app](https://reprozero.vercel.app/) · [Worked example (no login)](https://reprozero.vercel.app/showcase/dit-1842) · [Executable AWS demo repo](https://github.com/Avantiikaa16/ReproZero_AWS_Demo)
 
 ![ReproZero — turn production incidents into executable reproductions](apps/web/public/og.png)
 
-ReproZero turns incomplete production-incident evidence into a deterministic reproduction, connects the failure to the relevant code path, proposes a candidate repair, and verifies that repair against the same environment.
+Most production bugs get closed on a hunch. Reproducing the failure — piecing together
+logs, guessing at repro steps, rebuilding the exact environment — often takes longer than
+writing the fix, so people skip it, ship a plausible change, and hope.
 
-Instead of leaving an engineer with a Jira ticket and the phrase *“unable to reproduce,”* ReproZero produces the artifacts needed to start fixing the problem:
+ReproZero closes that gap. Given the evidence from a ticket, it compiles an executable
+reproduction, runs it in an isolated sandbox, and proves whether a candidate fix actually
+resolves it — with real before/after test results, not a plausible-sounding explanation.
 
-- A structured **ReproSpec** with preconditions, actions, and assertions
-- A visual, deterministic **reproduction sandbox**
-- The relevant repository **code path**
-- A Codex-generated **candidate patch**
-- Before-and-after **verification evidence**
-- Reusable **incident memory** for future tickets
+---
 
-## Why ReproZero?
+## What it is
 
-Production incidents rarely arrive as clean test cases. They arrive as fragments: screenshots, partial logs, resource IDs, stale runbooks, support notes, and an environment the developer cannot access.
+A multi-tenant web application (not a single-page demo). It has:
 
-ReproZero converts those fragments into a portable failing test.
+- **Accounts and workspaces** — Clerk authentication with Organizations; every incident,
+  run, integration, and audit event is workspace-scoped.
+- **Incident lifecycle** — a 10-state status model, assignment, a timeline (notes,
+  evidence requests, system events), reopen tracking, and a downloadable evidence bundle.
+- **Jira integration** — Jira Cloud OAuth 2.0 (3LO). Import a ticket as an incident,
+  keep an append-only snapshot history, and write back a comment or a status transition —
+  always behind an explicit confirmation screen showing the exact target and content.
+  Real-time sync via dynamically-registered webhooks, refreshed by a daily cron so they
+  never silently expire.
+- **GitHub integration** — GitHub OAuth App. Create a branch, or open a draft pull
+  request, from an incident — again behind an explicit confirmation before any write.
+- **Real sandboxed reproduction** — the AWS firewall-deletion scenario runs for real in a
+  short-lived [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) microVM: clone a
+  pinned commit, `npm install`, `npm test`, `npm run verify`, with the real pass/fail
+  counts parsed back out. See [what's real vs. simulated](#whats-real-vs-simulated).
+- **Reproduction adapters** — a `canHandle`/`run` adapter interface with six incident
+  types (AWS resource-cleanup race, Stripe webhook ordering, API pagination duplication,
+  a failing unit test, config/environment mismatch, database migration failure).
+- **Hosted memory** — every verified repair is stored with its root cause, code path, and
+  evidence; keyword-overlap matching surfaces past incidents sharing a root cause, and
+  every match lists the exact terms that matched (no black box).
+- **Audit log** — every security-sensitive action (integration connects/disconnects,
+  external writes, status/assignment changes, public-share toggles) is recorded.
+- **Public showcase** — any one incident can be opted in, per link, to a read-only public
+  page (`/showcase/<slug>`) with no login — evidence, verdict, patch, and timeline, but
+  none of the app controls or workspace internals.
 
-```text
-Incident evidence
-      ↓
-Structured ReproSpec
-      ↓
-Deterministic sandbox
-      ↓
-Failure reproduced
-      ↓
-Candidate repair
-      ↓
-Same sandbox rerun
-      ↓
-Fix verified
-```
+## Provider-agnostic by design
+
+Jira is treated as the *first* evidence adapter, not the core data model. `integration_connections`
+has a plain-string `provider` and a jsonb `config` — adding Linear, PagerDuty, or a raw
+webhook never requires a schema migration. Incidents reference a connection generically;
+no `jira_*` column exists on any core table.
 
 ## Demo incident: DIT-1842
 
-The included demonstration is based on a real class of infrastructure incident: a managed firewall becomes stuck in `DELETING` after a dependent VPC is manually removed.
-
-The deletion workflow successfully cleans up the Elastic IP and subnet, then calls `deleteVpc`. AWS returns `ResourceNotFound`; the workflow stops before instance termination and never advances the firewall to `DELETED`.
+A managed firewall becomes stuck in `DELETING` after a dependent VPC is removed. The
+deletion workflow cleans up the Elastic IP and subnet, then calls `deleteVpc`; AWS returns
+`ResourceNotFound`, and the workflow exits before terminating the instance or advancing the
+firewall to `DELETED`.
 
 ```text
 EC2 firewall     Elastic IP        Subnet            VPC
 DELETING    →    DISASSOCIATED  →  DELETED      →    NOT FOUND
                                                        ↓
-                                             ResourceNotFound
-                                                       ↓
-                                          workflow exits with code 1
+                                             ResourceNotFound → exit 1
 ```
 
-ReproZero proposes an idempotent cleanup behavior: an already-absent dependency is treated as successfully deleted, while unexpected errors are still rethrown. The same environment is replayed, cleanup completes, and the firewall reaches `DELETED`.
+The proposed fix makes cleanup idempotent: an already-absent dependency is treated as
+successfully deleted, while every other error is still rethrown. The same environment is
+replayed in a fresh sandbox, cleanup completes, and the firewall reaches `DELETED` with
+`2/2` tests passing.
 
-## Judge-ready walkthrough
+See it end to end, no login required: **[reprozero.vercel.app/showcase/dit-1842](https://reprozero.vercel.app/showcase/dit-1842)**
 
-1. Open the [live application](https://reprozero.vercel.app/).
-2. Select **Load AWS demo**.
-3. Select **Build reproduction** and watch the agent pipeline.
-4. In **Sandbox**, inspect the missing-VPC failure and `exit 1` trace.
-5. Review **Code path** and the Codex-generated **Patch**.
-6. Select **Run patched workflow**.
-7. Confirm `exit 0`, `FIX VERIFIED`, and firewall state `DELETED`.
-8. Open **Memory** or export the complete evidence bundle.
+## Tech stack
 
-## Architecture
-
-```text
-Jira ticket / logs / files / Stripe event
-                     │
-                     ▼
-            ReproZero orchestrator
-                     │
-       ┌─────────────┼─────────────┐
-       ▼             ▼             ▼
- OpenAI analysis  Greptile     Claude-Mem
- incident facts   code path    prior incidents
-       └─────────────┼─────────────┘
-                     ▼
-                  ReproSpec
-        preconditions · action · assertions
-                     │
-                     ▼
-        deterministic AWS simulator
-                     │
-              failure reproduced
-                     │
-                     ▼
-          candidate patch + regression test
-                     │
-                     ▼
-            identical scenario rerun
-                     │
-                     ▼
-              verified evidence bundle
-```
-
-### Integration responsibilities
-
-| Integration | Role in ReproZero |
+| Area | Choice |
 | --- | --- |
-| **OpenAI Codex** | Primary coding agent used to build ReproZero; runtime incident reasoning and candidate-repair explanation |
-| **Greptile** | Repository indexing and execution-path context |
-| **Claude-Mem** | Similar-incident recall and storage of verified lessons in the local workflow |
-| **AWS** | Domain model for the infrastructure reproduction and executable demo fixture |
-| **Stripe** | Signature-verified ingestion for event-driven incident evidence |
-| **GitHub** | Source repository access and executable demo inspection |
-| **Vercel** | Public deployment of the web application and API routes |
+| Framework | Next.js 16 (App Router, Turbopack), deployed on Vercel |
+| Auth | Clerk (`@clerk/nextjs`) with Organizations |
+| Database | Neon Postgres (serverless HTTP driver) + Drizzle ORM — 12 tables, 6 migrations |
+| Sandboxed execution | `@vercel/sandbox` — isolated microVMs |
+| Validation | Zod on every mutation route |
+| Secrets at rest | AES-256-GCM (`node:crypto`) for OAuth tokens |
+| Tests | Vitest + jsdom (34 tests) |
 
-## What is real in the hackathon build?
+## What's real vs. simulated
 
-- OpenAI analysis runs live when `OPENAI_API_KEY` is configured.
-- Greptile repository status and indexed commit are retrieved live when configured.
-- Stripe webhooks are cryptographically verified and have been tested end to end.
-- Claude-Mem recall and observation storage run against the local CMEM worker.
-- The AWS demo repository contains executable workflow code and regression tests.
-- The web sandbox is a deterministic visualization of the simulated AWS execution.
+ReproZero is deliberate about not overstating what runs. Every reproduction run is
+labeled `live_sandbox` or `demo_simulation`, and the label reflects reality:
 
-The demo does **not** provision or mutate real EC2, VPC, subnet, or load-balancer resources. This keeps the hackathon demonstration safe, fast, and repeatable. A production version would execute ReproSpecs in short-lived, policy-controlled cloud sandboxes.
+- **Genuinely executed:** the AWS firewall-deletion scenario. It clones
+  [ReproZero_AWS_Demo](https://github.com/Avantiikaa16/ReproZero_AWS_Demo) at a pinned
+  commit into a real sandbox and runs its actual tests and verification script. Its tests
+  are self-contained against an in-memory fake AWS client — no real cloud resources are
+  ever provisioned or mutated.
+- **Honest simulations:** the other five adapter types. They model realistic ReproSpecs,
+  failures, patches, and verification data, and are always shown as `demo_simulation` —
+  never dressed up as live.
+- **OpenAI / Greptile / Claude-Mem** run live when their keys are configured and fall
+  back to a labeled deterministic adapter otherwise.
+- The marketing page's inline "Reproduce an incident" widget is the deterministic
+  simulation; the `/showcase` page shows a genuinely sandbox-executed result.
 
 ## Local development
 
-### Requirements
-
-- Node.js 22.13 or newer
-- npm
-- Optional: Claude-Mem worker at `http://127.0.0.1:37777`
-
-### Install and run
+Requirements: Node.js 22.13+ and npm. A Neon (or any Postgres) database and a Clerk
+application are needed for the authenticated app; the public marketing page and the
+`/api/reproduce` demo run without them.
 
 ```bash
 git clone https://github.com/Avantiikaa16/ReproZero.git
 cd ReproZero/apps/web
 npm ci
-cp .env.example .env.local
+cp .env.example .env.local      # PowerShell: Copy-Item .env.example .env.local
+# fill in .env.local, then:
+npm run db:migrate              # apply schema to your database
 npm run dev
 ```
 
-Open the local URL printed in the terminal, normally `http://localhost:3000`.
+### Environment variables
 
-On Windows PowerShell, copy the environment template with:
-
-```powershell
-Copy-Item .env.example .env.local
-```
-
-## Environment variables
-
-Minimum variables for the complete hosted workflow:
+`apps/web/.env.example` is the source of truth. The essentials:
 
 ```dotenv
+# App
+APP_BASE_URL=http://localhost:3000
+
+# Clerk (authenticated app)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+CLERK_WEBHOOK_SECRET=
+
+# Database
+DATABASE_URL=
+DATABASE_URL_UNPOOLED=          # direct connection, used by migrations
+
+# Encrypts integration OAuth tokens at rest — openssl rand -base64 32
+TOKEN_ENCRYPTION_KEY=
+
+# Jira Cloud OAuth (optional)   callback {APP_BASE_URL}/api/integrations/jira/callback
+JIRA_OAUTH_CLIENT_ID=
+JIRA_OAUTH_CLIENT_SECRET=
+
+# GitHub OAuth App (optional)   callback {APP_BASE_URL}/api/integrations/github/callback
+GITHUB_OAUTH_CLIENT_ID=
+GITHUB_OAUTH_CLIENT_SECRET=
+
+# Runtime reasoning / evidence (optional — labeled fallbacks when unset)
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.4-mini
 GREPTILE_API_KEY=
-GITHUB_TOKEN=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
+CLAUDE_MEM_BASE_URL=
+
+# Authenticates Vercel Cron's daily Jira-webhook refresh (optional)
+CRON_SECRET=
 ```
 
-Local Claude-Mem integration:
-
-```dotenv
-CLAUDE_MEM_BASE_URL=http://127.0.0.1:37777
-```
-
-Never commit `.env.local` or paste credentials into issues, screenshots, or chat messages. Environment files containing secrets are ignored by Git.
-
-## Stripe webhook
-
-The deployed webhook endpoint is:
-
-```text
-https://reprozero.vercel.app/api/stripe/webhook
-```
-
-The route verifies the `stripe-signature` HMAC, enforces timestamp tolerance, rejects malformed payloads, and detects duplicate event IDs during the active runtime.
-
-For a sandbox test:
-
-```bash
-stripe trigger checkout.session.completed
-```
-
-## Claude-Mem
-
-Check the local worker:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:37777/api/health
-```
-
-A healthy worker reports `status: ok`, `initialized: true`, and `mcpReady: true`.
-
-When ReproZero runs locally, the **Memory** artifact shows recalled memories and the stored observation ID. The hosted Vercel application cannot access a worker bound to the developer's localhost, so it preserves the verified lesson in the exported evidence bundle instead.
+Never commit `.env.local` or paste credentials into issues, screenshots, or chat. Secret
+files are gitignored.
 
 ## Verification
-
-### Web application
 
 ```bash
 cd apps/web
 npm run lint
+npm run test        # Vitest
 npx next build
 ```
 
-### Executable AWS demo
-
-The simulator and regression tests live in [ReproZero_AWS_Demo](https://github.com/Avantiikaa16/ReproZero_AWS_Demo).
+The executable AWS demo (separate repo):
 
 ```bash
 git clone https://github.com/Avantiikaa16/ReproZero_AWS_Demo.git
-cd ReproZero_AWS_Demo
-npm test
+cd ReproZero_AWS_Demo && npm test   # expect 2 passing tests
 ```
 
-Expected result: two passing tests, including deletion when the VPC is already absent.
-
-## Repository structure
+## Repository layout
 
 ```text
 ReproZero/
-├── apps/
-│   └── web/                 # Next.js application and API routes
-├── docs/                    # Architecture and MVP notes
-├── integrations/            # Integration design notes
-├── packages/
-│   └── contracts/           # Shared ReproSpec contract direction
-└── services/
-    └── orchestrator/        # Orchestration service direction
+├── apps/web/                  # the application — everything below is here
+│   ├── app/
+│   │   ├── (marketing)/       # public landing page + /showcase/[slug]
+│   │   ├── (auth)/            # Clerk sign-in / sign-up
+│   │   ├── (app)/             # authenticated workspace (7 pages)
+│   │   └── api/               # 33 route handlers
+│   ├── app/lib/               # auth context, audit, crypto, adapters, integrations
+│   ├── db/                    # Drizzle schema (12 tables) + migrations
+│   ├── middleware.ts          # Clerk route protection
+│   └── test/                  # Vitest suite
+├── docs/                      # early architecture / scope notes
+├── integrations/              # per-integration design notes
+├── packages/ · services/      # early direction notes (not built out)
 ```
 
-Important web paths:
+Key files:
 
 ```text
-apps/web/app/page.tsx                    # Incident workspace and sandbox UI
-apps/web/app/api/reproduce/route.ts      # Reproduction orchestration endpoint
-apps/web/app/api/stripe/webhook/route.ts # Signed Stripe event ingestion
-apps/web/app/api/health/route.ts         # Integration configuration health
-apps/web/app/lib/live-integrations.ts    # OpenAI, Greptile, and Claude-Mem adapters
-apps/web/app/lib/repro-engine.ts         # Deterministic demo result contract
+apps/web/middleware.ts                        # route protection + which API routes get auth context
+apps/web/db/schema/                           # provider-agnostic data model
+apps/web/app/lib/auth-context.ts              # requireWorkspaceContext() — the single authz gate
+apps/web/app/lib/secret-crypto.ts             # AES-256-GCM token encryption
+apps/web/app/lib/jira-adapter.ts              # Jira OAuth, search, import, write-back, webhooks
+apps/web/app/lib/github-adapter.ts            # GitHub OAuth, branch/PR creation
+apps/web/app/lib/sandbox-runner.ts            # real @vercel/sandbox execution
+apps/web/app/lib/adapters/                    # the six reproduction adapters
+apps/web/app/lib/memory-store.ts              # hosted memory + similarity matching
+apps/web/app/api/reproduce/route.ts           # public demo endpoint (rate-limited, size-capped)
 ```
 
 ## Roadmap
 
-- Execute ReproSpecs in ephemeral cloud microVMs
-- Generate an editable failing test directly inside the developer's repository
-- Open the reproduction in VS Code, Cursor, or a Codespace
-- Apply or reject candidate patches
-- Create a branch and pull request with verification evidence
-- Ingest Jira, Linear, CI, observability, and support-ticket evidence
-- Add secret redaction and policy approval before external execution
-- Measure time-to-reproduction, tokens saved, and incident-resolution improvement
-
-## Product vision
-
-```text
-Reproduce → Open in IDE → Apply patch → Verify → Create PR
-```
-
-ReproZero does not replace the developer's IDE. It removes the slowest and least reliable part of incident response: reconstructing the failure before useful engineering work can begin.
+- More evidence adapters (Linear, PagerDuty, CI, observability)
+- Genuine sandbox execution for more than one scenario type
+- Push the candidate patch to the created branch automatically
+- Secret redaction and a policy-approval step before any external execution
+- Metrics: time-to-reproduction, tokens saved, resolution-time improvement
 
 **Every escalated incident should become a portable failing test.**
