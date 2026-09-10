@@ -194,7 +194,13 @@ h1 em { display:block; color:var(--acid); font-style:normal; }
 .integrationGrid p { margin:11px 0 0; color:#738292; font-size:11px; line-height:1.65; }.integrationFeature p { max-width:390px; font-size:13px; }
 
 .finalCta { min-height:400px; display:flex; align-items:center; justify-content:space-between; gap:60px; padding:70px; border:1px solid rgba(200,255,92,.16); border-radius:24px; background:radial-gradient(circle at 70% 50%,rgba(200,255,92,.08),transparent 35%),linear-gradient(125deg,#0e1d28,#09131c); }
-.footer { min-height:160px; display:flex; align-items:center; justify-content:space-between; color:#566575; font-size:10px; }.footer p { font:10px/1 var(--font-geist-mono); }
+.footer { min-height:160px; display:flex; align-items:center; justify-content:space-between; gap:20px; color:#566575; font-size:10px; }.footer p { font:10px/1 var(--font-geist-mono); }
+.footerMeta { display:flex; flex-direction:column; gap:8px; align-items:center; text-align:center; }
+.footerMeta small { font:10px/1 var(--font-geist-mono); color:#465565; }
+.footerLinks { display:flex; flex-direction:column; gap:8px; align-items:flex-end; text-align:right; }
+.footerLinks a { color:var(--sky); font:10px/1 var(--font-geist-mono); }
+.footerLinks a:hover { color:white; }
+@media (max-width:620px) { .footerMeta,.footerLinks { align-items:flex-start; text-align:left; } }
 
 @media(max-width:900px){.problemGrid{grid-template-columns:1fr;gap:25px}.workflowGrid{grid-template-columns:repeat(2,1fr)}.workflowGrid article:nth-child(2){border-right:0}.workflowGrid article:nth-child(-n+2){border-bottom:1px solid var(--line)}.integrationGrid{grid-template-columns:1fr 1fr}.integrationGrid .integrationFeature{grid-column:span 2;grid-row:auto;min-height:320px}.sectionHeader{align-items:start;flex-direction:column}.finalCta{padding:50px;flex-direction:column;align-items:start}}
 @media(max-width:620px){.problemSection,.integrationsSection{padding-block:90px}.beforeAfter{grid-template-columns:1fr}.comparisonCard.before,.comparisonCard.after{border-radius:14px}.comparisonArrow{margin:-8px auto;transform:rotate(90deg)}.workflowGrid,.integrationGrid{grid-template-columns:1fr}.workflowGrid article,.workflowGrid article:nth-child(2){border-right:0;border-bottom:1px solid var(--line)}.integrationGrid .integrationFeature{grid-column:auto}.finalCta{padding:34px}.footer{align-items:flex-start;flex-direction:column;justify-content:center;gap:22px}}
